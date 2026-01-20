@@ -1,6 +1,6 @@
-# Gemini Live API サンプル
+# Gemini Live API サンプル (google-genai ライブラリ使用)
 
-Gemini Live APIを使用して、リクエスト → ツール実行 → ストリーム応答を実現する簡単なサンプルコードです。
+Gemini Live APIを`google-genai`ライブラリを使用して、リクエスト → ツール実行 → ストリーム応答を実現する簡単なサンプルコードです。
 
 ## 機能
 
@@ -34,45 +34,53 @@ python gemini_live_sample.py
 
 ## コードの流れ
 
-### 1. WebSocket接続
+### 1. クライアント作成
 ```python
-async with websockets.connect(url) as ws:
+client = genai.Client(api_key=api_key)
 ```
 
-### 2. セットアップメッセージ送信
-- モデル設定（gemini-2.0-flash-exp）
-- ツール定義（`get_current_time`関数）
-
-### 3. ユーザーメッセージ送信
+### 2. ツール定義
 ```python
-user_message = {
-    "client_content": {
-        "turns": [{"role": "user", "parts": [{"text": "今の時刻を教えてください"}]}],
-        "turn_complete": True
-    }
-}
+tools = [{
+    "function_declarations": [{
+        "name": "get_current_time",
+        "description": "現在の日時を取得します",
+        "parameters": {"type": "object", "properties": {}}
+    }]
+}]
 ```
 
-### 4. ストリーム応答受信
-- Geminiからのツール呼び出しリクエストを検出
-- `functionCall`を受信
+### 3. Live APIセッション開始
+```python
+async with client.aio.live.connect(model=model_id, config=config, tools=tools) as session:
+```
 
-### 5. ツール実行
+### 4. ユーザーメッセージ送信
+```python
+await session.send("今の時刻を教えてください", end_of_turn=True)
+```
+
+### 5. ストリーム応答受信
+```python
+async for response in session.receive():
+    # テキストやツール呼び出しを処理
+```
+
+### 6. ツール実行
 - ローカルでツールを実行
 - 結果を取得
 
-### 6. ツール結果を送信
+### 7. ツール結果を送信
 ```python
-tool_response = {
-    "functionResponse": {
-        "id": tool_call_id,
-        "name": tool_name,
-        "response": {"result": tool_result}
-    }
+function_response = {
+    "id": function_call.id,
+    "name": function_call.name,
+    "response": {"result": result}
 }
+await session.send(function_response, end_of_turn=True)
 ```
 
-### 7. 最終応答をストリームで受信
+### 8. 最終応答をストリームで受信
 - Geminiがツール結果を使って最終的な回答を生成
 - ストリームで受信・表示
 
