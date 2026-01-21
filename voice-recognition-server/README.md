@@ -2,19 +2,285 @@
 
 Gemini Live APIを使用した音声認識WebSocketサーバです。ウェイクワード検知、ツール実行（天気情報取得）、音声+テキスト応答に対応しています。
 
-## 機能
+## 目次
 
-- ✅ **WebSocketベースのリアルタイム通信**
-- ✅ **カスタムウェイクワード検知**（gemini、ジェミニ、hey gemini）
-- ✅ **ツール実行（Function Calling）**
-  - 天気情報取得 (`get_weather`)
-  - 天気予報取得 (`get_forecast`)
-  - 天気アラート確認 (`get_weather_alerts`)
-- ✅ **音声+テキスト両方の応答モダリティ**
-- ✅ **ストリーミングレスポンス**
-- ✅ **チャット履歴管理**
+- [概要](#概要)
+- [処理フロー](#処理フロー)
+- [シーケンス図](#シーケンス図)
+- [アーキテクチャ](#アーキテクチャ)
+- [ファイル構成と各コンポーネントの役割](#ファイル構成と各コンポーネントの役割)
+- [セットアップ](#セットアップ)
+- [使い方](#使い方)
+- [メッセージプロトコル](#メッセージプロトコル)
 
-## ディレクトリ構成
+---
+
+## 概要
+
+このサーバは、クライアントからのテキスト/音声入力を受け取り、Google の Gemini API を使って処理し、結果をストリーミングで返却します。
+
+### 主な機能
+
+- WebSocketベースのリアルタイム通信
+- カスタムウェイクワード検知（gemini、ジェミニ、hey gemini）
+- ツール実行（Function Calling）- 天気情報取得
+- ストリーミングレスポンス
+- チャット履歴管理
+
+---
+
+## 処理フロー
+
+### 全体の流れ
+
+```
+1. クライアント処理（Browser）
+   └─ ユーザー入力（テキスト or 音声）
+   └─ 音声の場合: Web Speech API でテキスト変換
+   └─ WebSocket でサーバに送信
+
+2. サーバへのメッセージ送信
+   └─ JSON形式: { type: "text", data: "Gemini、東京の天気を教えて" }
+
+3. サーバでの処理
+   └─ WebSocketサーバがメッセージ受信
+   └─ ウェイクワード検出 → 除去
+   └─ Gemini API へストリーミング送信
+   └─ ツール呼び出しがあれば実行
+   └─ 結果をストリーミングで返却
+
+4. フロントへの返却
+   └─ チャンクごとに { type: "chunk", data: "..." } を送信
+   └─ 完了時に { type: "completed", text: "..." } を送信
+```
+
+### 詳細な処理ステップ
+
+| ステップ | 処理場所 | 処理内容 |
+|---------|---------|---------|
+| 1 | クライアント | ユーザーがテキスト入力 or 音声入力 |
+| 2 | クライアント | 音声入力の場合、Web Speech API でテキスト変換 |
+| 3 | クライアント | WebSocket で `{type: "text", data: "..."}` を送信 |
+| 4 | server.js | メッセージを受信、`handleTextMessage()` を呼び出し |
+| 5 | server.js | `processing_started` をクライアントに通知 |
+| 6 | gemini-client.js | `processText()` でウェイクワード検出 |
+| 7 | wake-word-detector.js | テキストからウェイクワードを検出・除去 |
+| 8 | gemini-client.js | Gemini API に `sendMessageStream()` で送信 |
+| 9 | gemini-client.js | ストリーム応答を受信、チャンクごとにコールバック |
+| 10 | server.js | チャンクを `{type: "chunk", ...}` でクライアントに送信 |
+| 11 | tools/index.js | `function_call` があればツールを実行 |
+| 12 | gemini-client.js | ツール結果を Gemini API に送信、最終応答を取得 |
+| 13 | server.js | `{type: "completed", ...}` でクライアントに完了通知 |
+
+---
+
+## シーケンス図
+
+### テキストメッセージの処理フロー（ツール呼び出しあり）
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as クライアント<br/>(Browser)
+    participant WS as WebSocket<br/>Server<br/>(server.js)
+    participant GC as GeminiClient<br/>(gemini-client.js)
+    participant WD as WakeWord<br/>Detector
+    participant GA as Gemini API
+    participant T as Tools<br/>(tools/index.js)
+
+    Note over C,T: === 1. 接続フェーズ ===
+    C->>WS: WebSocket接続要求
+    WS->>GC: new GeminiLiveClient()
+    GC->>GA: initialize()<br/>モデル取得・チャット開始
+    GA-->>GC: 初期化完了
+    WS-->>C: {type: "connected", clientId: "xxx"}
+
+    Note over C,T: === 2. テキスト送信フェーズ ===
+    C->>WS: {type: "text", data: "Gemini、東京の天気を教えて"}
+    WS-->>C: {type: "processing_started"}
+    WS->>GC: processText(text, onChunk, onComplete)
+
+    Note over C,T: === 3. ウェイクワード検出フェーズ ===
+    GC->>WD: detect(text)
+    WD-->>GC: true (ウェイクワード "Gemini" 検出)
+    GC->>WD: removeWakeWord(text)
+    WD-->>GC: "東京の天気を教えて"
+
+    Note over C,T: === 4. Gemini API通信フェーズ（ストリーミング）===
+    GC->>GA: chat.sendMessageStream("東京の天気を教えて")
+
+    loop ストリーム応答受信
+        GA-->>GC: chunk (テキスト)
+        GC-->>WS: onChunk({type: "text", data: "..."})
+        WS-->>C: {type: "chunk", chunkType: "text", data: "..."}
+    end
+
+    GA-->>GC: chunk (function_call: get_weather)
+    GC-->>WS: onChunk({type: "function_call", data: {...}})
+    WS-->>C: {type: "chunk", chunkType: "function_call", data: {...}}
+
+    Note over C,T: === 5. ツール実行フェーズ ===
+    GC->>T: executeTools([{name: "get_weather", args: {location: "東京"}}])
+    T->>T: getWeather("東京")
+    T-->>GC: [{functionResponse: {name: "get_weather", response: {...}}}]
+    GC-->>WS: onChunk({type: "tool_results", data: [...]})
+    WS-->>C: {type: "chunk", chunkType: "tool_results", data: [...]}
+
+    Note over C,T: === 6. 最終応答フェーズ ===
+    GC->>GA: chat.sendMessageStream(toolResults)
+
+    loop 最終ストリーム応答受信
+        GA-->>GC: chunk (最終テキスト)
+        GC-->>WS: onChunk({type: "final_text", data: "..."})
+        WS-->>C: {type: "chunk", chunkType: "final_text", data: "..."}
+    end
+
+    GC-->>WS: onComplete({text: "東京の天気は...", hadToolCalls: true})
+    WS-->>C: {type: "completed", text: "東京の天気は...", hadToolCalls: true}
+```
+
+### テキストメッセージの処理フロー（ツール呼び出しなし）
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as クライアント
+    participant WS as WebSocket Server
+    participant GC as GeminiClient
+    participant WD as WakeWord Detector
+    participant GA as Gemini API
+
+    C->>WS: {type: "text", data: "Gemini、こんにちは"}
+    WS-->>C: {type: "processing_started"}
+    WS->>GC: processText(text, onChunk, onComplete)
+
+    GC->>WD: detect(text) → true
+    GC->>WD: removeWakeWord(text) → "こんにちは"
+
+    GC->>GA: chat.sendMessageStream("こんにちは")
+
+    loop ストリーム応答
+        GA-->>GC: chunk (テキスト)
+        GC-->>WS: onChunk({type: "text", data: "..."})
+        WS-->>C: {type: "chunk", chunkType: "text", data: "..."}
+    end
+
+    Note over C,GA: ツール呼び出しなしで直接完了
+    GC-->>WS: onComplete({text: "こんにちは！...", hadToolCalls: false})
+    WS-->>C: {type: "completed", text: "こんにちは！...", hadToolCalls: false}
+```
+
+### 音声入力の処理フロー
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as ユーザー
+    participant B as Browser<br/>(Web Speech API)
+    participant C as クライアント<br/>(JavaScript)
+    participant WS as WebSocket Server
+
+    Note over U,WS: クライアント側で音声→テキスト変換
+    U->>B: 音声入力「Gemini、大阪の天気は？」
+    B->>B: SpeechRecognition<br/>音声認識処理
+    B-->>C: onresult: {transcript: "Gemini、大阪の天気は？", isFinal: true}
+
+    C->>WS: {type: "text", data: "Gemini、大阪の天気は？"}
+
+    Note over U,WS: 以降はテキスト処理と同じフロー
+    WS-->>C: {type: "processing_started"}
+    WS-->>C: {type: "chunk", ...}
+    WS-->>C: {type: "completed", ...}
+```
+
+### 接続〜切断のライフサイクル
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as クライアント
+    participant WS as WebSocket Server
+    participant GC as GeminiClient
+    participant GA as Gemini API
+
+    Note over C,GA: 接続
+    C->>WS: WebSocket接続
+    WS->>GC: new GeminiLiveClient()
+    GC->>GA: initialize()
+    GA-->>GC: OK
+    WS-->>C: {type: "connected", clientId: "client_xxx"}
+
+    Note over C,GA: 会話（複数回）
+    loop 会話
+        C->>WS: {type: "text", data: "..."}
+        WS->>GC: processText()
+        GC->>GA: sendMessageStream()
+        GA-->>GC: response
+        WS-->>C: {type: "completed", ...}
+    end
+
+    Note over C,GA: 履歴クリア（オプション）
+    C->>WS: {type: "clear_history"}
+    WS->>GC: clearHistory()
+    GC->>GC: conversationHistory = []
+    WS-->>C: {type: "history_cleared"}
+
+    Note over C,GA: 切断
+    C->>WS: WebSocket close
+    WS->>WS: clients.delete(clientId)
+```
+
+---
+
+## アーキテクチャ
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           クライアント側                                  │
+│  ┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐  │
+│  │   Web Speech API  │    │   テキスト入力    │    │    UI 表示       │  │
+│  │   (音声→テキスト) │    │                  │    │                  │  │
+│  └────────┬─────────┘    └────────┬─────────┘    └────────▲─────────┘  │
+│           │                       │                       │            │
+│           └───────────┬───────────┘                       │            │
+│                       ▼                                   │            │
+│              ┌────────────────┐                           │            │
+│              │   WebSocket    │◄──────────────────────────┘            │
+│              │   クライアント  │                                        │
+│              └────────┬───────┘                                        │
+└───────────────────────┼────────────────────────────────────────────────┘
+                        │ WebSocket (ws://localhost:8080)
+                        ▼
+┌───────────────────────────────────────────────────────────────────────┐
+│                           サーバ側                                     │
+│  ┌────────────────────────────────────────────────────────────────┐  │
+│  │                        server.js                                │  │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐  │  │
+│  │  │  WebSocket   │  │   クライアント │  │   メッセージ         │  │  │
+│  │  │   Server     │─▶│   管理        │─▶│   ルーティング       │  │  │
+│  │  └──────────────┘  └──────────────┘  └──────────┬───────────┘  │  │
+│  └─────────────────────────────────────────────────┼───────────────┘  │
+│                                                    ▼                  │
+│  ┌────────────────────────────────────────────────────────────────┐  │
+│  │                     gemini-client.js                            │  │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐  │  │
+│  │  │ WakeWord     │─▶│  Gemini API  │─▶│  ストリーミング      │  │  │
+│  │  │ Detector     │  │  チャット     │  │   レスポンス処理     │  │  │
+│  │  └──────────────┘  └──────────────┘  └──────────┬───────────┘  │  │
+│  └─────────────────────────────────────────────────┼───────────────┘  │
+│                                                    ▼                  │
+│  ┌────────────────────────────────────────────────────────────────┐  │
+│  │                       tools/index.js                            │  │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐  │  │
+│  │  │  get_weather │  │ get_forecast │  │  get_weather_alerts  │  │  │
+│  │  └──────────────┘  └──────────────┘  └──────────────────────┘  │  │
+│  └────────────────────────────────────────────────────────────────┘  │
+└───────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## ファイル構成と各コンポーネントの役割
 
 ```
 voice-recognition-server/
@@ -30,9 +296,57 @@ voice-recognition-server/
 ├── client/
 │   └── test-client.html       # テスト用Webクライアント
 ├── package.json
-├── .env.example
 └── README.md
 ```
+
+### 各ファイルの役割
+
+| ファイル | 役割 | 主な関数/クラス |
+|---------|------|----------------|
+| `server.js` | WebSocketサーバ本体。接続管理、メッセージルーティング | `handleTextMessage()`, `handleAudioMessage()` |
+| `gemini-client.js` | Gemini APIとの通信、ストリーミング処理 | `GeminiLiveClient`, `processText()`, `initialize()` |
+| `wake-word-detector.js` | ウェイクワード検出・除去 | `WakeWordDetector`, `detect()`, `removeWakeWord()` |
+| `audio-processor.js` | 音声データのバッファリング（現在は限定的使用） | `AudioProcessor`, `addAudioData()` |
+| `config.js` | 設定値の一元管理 | `config`, `validateConfig()` |
+| `tools/index.js` | ツール定義とディスパッチ | `getToolDefinitions()`, `executeTool()`, `executeTools()` |
+| `tools/weather.js` | 天気情報取得（シミュレーション） | `getWeather()`, `getForecast()`, `getWeatherAlerts()` |
+| `test-client.html` | ブラウザ用テストクライアント | WebSocket接続、Web Speech API、UI |
+
+---
+
+## メッセージプロトコル
+
+### クライアント → サーバ
+
+| type | 説明 | データ例 |
+|------|------|---------|
+| `text` | テキストメッセージ送信 | `{type: "text", data: "Gemini、東京の天気を教えて"}` |
+| `audio` | 音声データ送信（非推奨） | `{type: "audio", data: "<base64>"}` |
+| `clear_history` | 会話履歴クリア | `{type: "clear_history"}` |
+| `get_stats` | 統計情報取得 | `{type: "get_stats"}` |
+
+### サーバ → クライアント
+
+| type | 説明 | データ例 |
+|------|------|---------|
+| `connected` | 接続成功 | `{type: "connected", clientId: "xxx", config: {...}}` |
+| `processing_started` | 処理開始 | `{type: "processing_started"}` |
+| `chunk` | ストリーミングチャンク | `{type: "chunk", chunkType: "text", data: "..."}` |
+| `completed` | 処理完了 | `{type: "completed", text: "...", hadToolCalls: true}` |
+| `error` | エラー | `{type: "error", message: "...", error: "..."}` |
+| `history_cleared` | 履歴クリア完了 | `{type: "history_cleared"}` |
+| `stats` | 統計情報 | `{type: "stats", data: {...}}` |
+
+### chunkType の種類
+
+| chunkType | 説明 |
+|-----------|------|
+| `text` | Geminiからのテキスト応答（初回） |
+| `function_call` | ツール呼び出し要求 |
+| `tool_results` | ツール実行結果 |
+| `final_text` | ツール実行後の最終テキスト応答 |
+
+---
 
 ## セットアップ
 
@@ -45,13 +359,11 @@ npm install
 
 ### 2. 環境変数の設定
 
-`.env.example`をコピーして`.env`を作成：
-
 ```bash
-cp .env.example .env
+export GEMINI_API_KEY=your_api_key_here
 ```
 
-`.env`ファイルを編集してAPIキーを設定：
+または `.env` ファイルを作成:
 
 ```env
 GEMINI_API_KEY=your_api_key_here
@@ -62,255 +374,43 @@ HOST=0.0.0.0
 ### 3. サーバ起動
 
 ```bash
+# 開発モード（ファイル変更時に自動再起動）
+npm run dev
+
+# 本番モード
 npm start
 ```
 
-または開発モード（ファイル変更時に自動再起動）：
-
-```bash
-npm run dev
-```
-
-サーバが起動すると以下のように表示されます：
-
-```
-╔══════════════════════════════════════════════════════════╗
-║       音声認識サーバ (Gemini Live API)                    ║
-╚══════════════════════════════════════════════════════════╝
-
-🚀 WebSocketサーバ起動: ws://0.0.0.0:8080
-📋 モデル: gemini-2.0-flash-exp
-🎤 ウェイクワード: gemini, ジェミニ, hey gemini
-📡 応答モダリティ: AUDIO, TEXT
-```
+---
 
 ## 使い方
 
 ### テストクライアントを使用
 
-ブラウザで `client/test-client.html` を開きます：
+1. サーバを起動: `npm run dev`
+2. ブラウザで `client/test-client.html` を開く
+3. 「接続」ボタンをクリック
+4. テキスト入力にウェイクワードを含むメッセージを入力して送信
+   - 例: "Gemini、東京の天気を教えて"
+5. または「音声認識開始」ボタンで音声入力
 
-```bash
-open client/test-client.html
-# または
-# Windowsの場合: start client/test-client.html
-# Linuxの場合: xdg-open client/test-client.html
-```
+### ウェイクワード
 
-1. **「接続」**ボタンをクリックしてサーバに接続
-2. **テキスト入力**でメッセージを送信（ウェイクワードを含める）
-   - 例: "gemini 東京の天気を教えて"
-3. **音声入力**ボタンで音声認識を開始（Web Speech API使用）
-
-### WebSocketプロトコル
-
-#### 接続
-
-```javascript
-const ws = new WebSocket('ws://localhost:8080');
-```
-
-#### メッセージ送信
-
-**テキストメッセージ**:
-```javascript
-ws.send(JSON.stringify({
-  type: 'text',
-  data: 'gemini 東京の天気を教えて'
-}));
-```
-
-**履歴クリア**:
-```javascript
-ws.send(JSON.stringify({
-  type: 'clear_history'
-}));
-```
-
-**統計情報取得**:
-```javascript
-ws.send(JSON.stringify({
-  type: 'get_stats'
-}));
-```
-
-#### メッセージ受信
-
-**接続成功**:
-```json
-{
-  "type": "connected",
-  "clientId": "client_xxx",
-  "config": {
-    "wakeWords": ["gemini", "ジェミニ", "hey gemini"],
-    "responseModalities": ["AUDIO", "TEXT"],
-    "audioConfig": { ... }
-  }
-}
-```
-
-**処理開始**:
-```json
-{
-  "type": "processing_started"
-}
-```
-
-**ストリーミングチャンク**:
-```json
-{
-  "type": "chunk",
-  "chunkType": "text", // または "function_call", "tool_results", "final_text"
-  "data": "テキストまたはツール情報"
-}
-```
-
-**完了**:
-```json
-{
-  "type": "completed",
-  "text": "完全な応答テキスト",
-  "hadToolCalls": true
-}
-```
-
-**エラー**:
-```json
-{
-  "type": "error",
-  "message": "エラーメッセージ",
-  "error": "詳細なエラー情報"
-}
-```
-
-## ウェイクワード検知
-
-システムは以下のウェイクワードを検知します：
+システムは以下のウェイクワードを検知します（大文字小文字を区別しない）:
 
 - `gemini`
 - `ジェミニ`
 - `hey gemini`
 
-**例**:
-- ✅ "gemini 東京の天気を教えて" → 検知される
-- ✅ "hey gemini、今日の天気は？" → 検知される
-- ❌ "東京の天気を教えて" → 検知されない（ウェイクワードなし）
-
-ウェイクワードは大文字小文字を区別せず、デバウンス機能（2秒以内の重複検知を無視）が実装されています。
-
-### ウェイクワードのカスタマイズ
-
-`src/config.js`を編集：
-
-```javascript
-wakeWord: {
-  keywords: ['your-custom-word', 'another-word'],
-  enabled: true,
-  caseSensitive: false,
-}
-```
-
-## ツール（Function Calling）
-
 ### 利用可能なツール
 
-#### 1. get_weather
-現在の天気情報を取得します。
+| ツール | 説明 | 例 |
+|-------|------|---|
+| `get_weather` | 現在の天気を取得 | "Gemini、東京の天気を教えて" |
+| `get_forecast` | 天気予報を取得 | "Gemini、大阪の3日間の天気予報を教えて" |
+| `get_weather_alerts` | 天気アラートを取得 | "Gemini、東京に天気アラートはある？" |
 
-```
-例: "gemini 東京の天気を教えて"
-```
-
-#### 2. get_forecast
-指定日数の天気予報を取得します。
-
-```
-例: "hey gemini 大阪の3日間の天気予報を教えて"
-```
-
-#### 3. get_weather_alerts
-天気アラート・警報情報を確認します。
-
-```
-例: "ジェミニ 東京に天気アラートはある？"
-```
-
-### カスタムツールの追加
-
-1. `src/tools/`に新しいツールファイルを作成
-2. `src/tools/index.js`にツール定義と実行ロジックを追加
-
-**例**: `src/tools/custom-tool.js`
-```javascript
-export function myCustomTool(param) {
-  // ツールのロジック
-  return { result: 'some data' };
-}
-```
-
-**例**: `src/tools/index.js`に追加
-```javascript
-import { myCustomTool } from './custom-tool.js';
-
-export function getToolDefinitions() {
-  return [{
-    functionDeclarations: [
-      // 既存のツール...
-      {
-        name: 'my_custom_tool',
-        description: 'カスタムツールの説明',
-        parameters: {
-          type: 'object',
-          properties: {
-            param: { type: 'string', description: 'パラメータの説明' }
-          },
-          required: ['param']
-        }
-      }
-    ]
-  }];
-}
-
-export function executeTool(functionCall) {
-  // ...
-  case 'my_custom_tool':
-    result = myCustomTool(args.param);
-    break;
-  // ...
-}
-```
-
-## システムプロンプトのカスタマイズ
-
-`src/config.js`の`systemInstruction`を編集：
-
-```javascript
-systemInstruction: `あなたはカスタムアシスタントです。
-特定の役割や制約をここに記述してください。`
-```
-
-## トラブルシューティング
-
-### サーバが起動しない
-
-- `GEMINI_API_KEY`が正しく設定されているか確認
-- ポート8080が使用可能か確認（他のプロセスが使用していないか）
-
-### ウェイクワードが検知されない
-
-- メッセージにウェイクワードが含まれているか確認
-- `src/config.js`の`wakeWord.enabled`が`true`になっているか確認
-
-### ツールが実行されない
-
-- Geminiがツールを呼び出すかどうかは、質問内容に依存します
-- より明確な質問を試してください（例: "東京の天気を教えて"）
-
-### 音声入力が動作しない
-
-- ブラウザが音声認識をサポートしているか確認（Chrome推奨）
-- マイクのアクセス許可が与えられているか確認
-- HTTPSまたはlocalhostでアクセスしているか確認
+---
 
 ## 技術スタック
 
@@ -323,23 +423,8 @@ systemInstruction: `あなたはカスタムアシスタントです。
 
 - 現在の`@google/generative-ai`パッケージは、音声ストリーミングを直接サポートしていません
 - 音声入力は、クライアント側でWeb Speech APIを使用してテキストに変換する必要があります
-- `@google/genai`パッケージ（新しいSDK）を使用すると、音声ストリーミングが可能になります
-
-## 今後の改善案
-
-- [ ] `@google/genai`パッケージへの移行（音声ストリーミング対応）
-- [ ] 実際の天気APIとの連携（OpenWeatherMap等）
-- [ ] 音声出力機能の追加
-- [ ] セッション永続化
-- [ ] 認証・認可機能
-- [ ] マルチユーザー対応
-- [ ] パフォーマンスモニタリング
+- 天気情報はシミュレーションデータです（実際のAPIとは連携していません）
 
 ## ライセンス
 
 MIT
-
-## 参考
-
-- [Gemini API Documentation](https://ai.google.dev/gemini-api/docs)
-- [Gemini Live API Guide](https://ai.google.dev/gemini-api/docs/live-guide)

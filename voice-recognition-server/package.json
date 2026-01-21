@@ -19,8 +19,9 @@
   "license": "MIT",
   "dependencies": {
     "@google/genai": "^1.37.0",
-    "ws": "^8.18.0",
-    "dotenv": "^16.4.0"
+    "@google/generative-ai": "^0.24.1",
+    "dotenv": "^16.4.0",
+    "ws": "^8.18.0"
   },
   "engines": {
     "node": ">=18.0.0"
