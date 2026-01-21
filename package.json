@@ -1,0 +1,24 @@
+{
+  "name": "gemini-live-api-sample",
+  "version": "1.0.0",
+  "description": "Gemini Live API sample with tool execution (Node.js version)",
+  "main": "gemini_live_sample.js",
+  "scripts": {
+    "start": "node gemini_live_sample.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "gemini",
+    "live-api",
+    "google-ai",
+    "tool-execution"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@google/generative-ai": "^0.21.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
