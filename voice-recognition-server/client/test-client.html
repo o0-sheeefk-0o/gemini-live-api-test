@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>音声認識サーバ テストクライアント</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+
+    .container {
+      background: white;
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      max-width: 800px;
+      width: 100%;
+      padding: 40px;
+    }
+
+    h1 {
+      color: #667eea;
+      margin-bottom: 10px;
+      font-size: 28px;
+    }
+
+    .status {
+      display: inline-block;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 14px;
+      margin-bottom: 20px;
+      font-weight: 600;
+    }
+
+    .status.disconnected {
+      background: #fee;
+      color: #c33;
+    }
+
+    .status.connected {
+      background: #efe;
+      color: #3c3;
+    }
+
+    .section {
+      margin-bottom: 30px;
+    }
+
+    .section-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 15px;
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: #667eea;
+      color: white;
+    }
+
+    .btn-secondary {
+      background: #f0f0f0;
+      color: #333;
+    }
+
+    .btn-danger {
+      background: #e74c3c;
+      color: white;
+    }
+
+    .btn-success {
+      background: #27ae60;
+      color: white;
+    }
+
+    .input-group {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    input[type="text"] {
+      flex: 1;
+      padding: 12px;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 16px;
+    }
+
+    input[type="text"]:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    .log-container {
+      background: #f8f9fa;
+      border-radius: 8px;
+      padding: 20px;
+      max-height: 400px;
+      overflow-y: auto;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+    }
+
+    .log-entry {
+      margin-bottom: 8px;
+      padding: 8px;
+      border-radius: 4px;
+    }
+
+    .log-entry.info {
+      background: #e3f2fd;
+      color: #1565c0;
+    }
+
+    .log-entry.success {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    .log-entry.error {
+      background: #ffebee;
+      color: #c62828;
+    }
+
+    .log-entry.chunk {
+      background: #fff3e0;
+      color: #e65100;
+    }
+
+    .wake-word-info {
+      background: #f0f0f0;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+
+    .wake-word-info strong {
+      color: #667eea;
+    }
+
+    .recording {
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% {
+        opacity: 1;
+      }
+      50% {
+        opacity: 0.5;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎤 音声認識サーバ テストクライアント</h1>
+    <div id="status" class="status disconnected">未接続</div>
+
+    <div class="wake-word-info">
+      <strong>ウェイクワード:</strong> gemini, ジェミニ, hey gemini<br>
+      <small>※ メッセージにウェイクワードを含めて送信してください</small>
+    </div>
+
+    <div class="section">
+      <div class="section-title">接続</div>
+      <div class="controls">
+        <button id="connectBtn" class="btn-primary" onclick="connect()">接続</button>
+        <button id="disconnectBtn" class="btn-secondary" onclick="disconnect()" disabled>切断</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">テキスト入力</div>
+      <div class="input-group">
+        <input type="text" id="textInput" placeholder="例: Gemini、東京の天気を教えて" />
+        <button class="btn-success" onclick="sendText()">送信</button>
+      </div>
+      <div class="controls">
+        <button class="btn-secondary" onclick="sendSample('gemini 東京の天気を教えて')">サンプル1: 天気</button>
+        <button class="btn-secondary" onclick="sendSample('hey gemini 大阪の3日間の天気予報を教えて')">サンプル2: 予報</button>
+        <button class="btn-secondary" onclick="sendSample('ジェミニ 東京に天気アラートはある？')">サンプル3: アラート</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">音声入力（Web Speech API）</div>
+      <div class="controls">
+        <button id="voiceBtn" class="btn-primary" onclick="toggleVoiceRecognition()">🎤 音声認識開始</button>
+        <span id="voiceStatus"></span>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">その他</div>
+      <div class="controls">
+        <button class="btn-secondary" onclick="clearHistory()">履歴クリア</button>
+        <button class="btn-secondary" onclick="getStats()">統計情報</button>
+        <button class="btn-danger" onclick="clearLog()">ログクリア</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">ログ</div>
+      <div id="log" class="log-container"></div>
+    </div>
+  </div>
+
+  <script>
+    let ws = null;
+    let recognition = null;
+    let isRecognizing = false;
+
+    // WebSocket接続
+    function connect() {
+      const url = 'ws://localhost:8080';
+      addLog(`接続中: ${url}`, 'info');
+
+      ws = new WebSocket(url);
+
+      ws.onopen = () => {
+        addLog('✅ 接続成功', 'success');
+        document.getElementById('status').textContent = '接続済み';
+        document.getElementById('status').className = 'status connected';
+        document.getElementById('connectBtn').disabled = true;
+        document.getElementById('disconnectBtn').disabled = false;
+      };
+
+      ws.onmessage = (event) => {
+        const message = JSON.parse(event.data);
+        handleMessage(message);
+      };
+
+      ws.onerror = (error) => {
+        addLog(`❌ エラー: ${error.message}`, 'error');
+      };
+
+      ws.onclose = () => {
+        addLog('❌ 切断されました', 'error');
+        document.getElementById('status').textContent = '未接続';
+        document.getElementById('status').className = 'status disconnected';
+        document.getElementById('connectBtn').disabled = false;
+        document.getElementById('disconnectBtn').disabled = true;
+      };
+    }
+
+    // WebSocket切断
+    function disconnect() {
+      if (ws) {
+        ws.close();
+        ws = null;
+      }
+    }
+
+    // メッセージ処理
+    function handleMessage(message) {
+      switch (message.type) {
+        case 'connected':
+          addLog(`✓ クライアントID: ${message.clientId}`, 'success');
+          break;
+
+        case 'processing_started':
+          addLog('⏳ 処理開始...', 'info');
+          break;
+
+        case 'chunk':
+          if (message.chunkType === 'text' || message.chunkType === 'final_text') {
+            addLog(`💬 ${message.data}`, 'chunk');
+          } else if (message.chunkType === 'function_call') {
+            addLog(`🔧 ツール呼び出し: ${message.data.name}`, 'info');
+          }
+          break;
+
+        case 'completed':
+          addLog(`✅ 完了: ${message.text}`, 'success');
+          break;
+
+        case 'error':
+          addLog(`❌ エラー: ${message.message}`, 'error');
+          break;
+
+        case 'history_cleared':
+          addLog('🗑️ 履歴をクリアしました', 'info');
+          break;
+
+        case 'stats':
+          addLog(`📊 統計情報: ${JSON.stringify(message.data, null, 2)}`, 'info');
+          break;
+
+        default:
+          addLog(`📦 ${message.type}: ${JSON.stringify(message)}`, 'info');
+      }
+    }
+
+    // テキスト送信
+    function sendText() {
+      const input = document.getElementById('textInput');
+      const text = input.value.trim();
+
+      if (!text) {
+        alert('テキストを入力してください');
+        return;
+      }
+
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        alert('先に接続してください');
+        return;
+      }
+
+      addLog(`→ 送信: ${text}`, 'info');
+      ws.send(JSON.stringify({
+        type: 'text',
+        data: text,
+      }));
+
+      input.value = '';
+    }
+
+    // サンプルテキスト送信
+    function sendSample(text) {
+      document.getElementById('textInput').value = text;
+      sendText();
+    }
+
+    // 音声認識（Web Speech API）
+    function toggleVoiceRecognition() {
+      if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+        alert('このブラウザは音声認識をサポートしていません');
+        return;
+      }
+
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        alert('先に接続してください');
+        return;
+      }
+
+      if (isRecognizing) {
+        stopVoiceRecognition();
+      } else {
+        startVoiceRecognition();
+      }
+    }
+
+    function startVoiceRecognition() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognition = new SpeechRecognition();
+      recognition.lang = 'ja-JP';
+      recognition.continuous = true;
+      recognition.interimResults = true;
+
+      recognition.onstart = () => {
+        isRecognizing = true;
+        document.getElementById('voiceBtn').textContent = '🔴 音声認識停止';
+        document.getElementById('voiceBtn').classList.add('recording');
+        document.getElementById('voiceStatus').textContent = '認識中...';
+        addLog('🎤 音声認識開始', 'info');
+      };
+
+      recognition.onresult = (event) => {
+        const result = event.results[event.results.length - 1];
+        const transcript = result[0].transcript;
+
+        if (result.isFinal) {
+          document.getElementById('voiceStatus').textContent = '';
+          addLog(`🎤 認識結果: ${transcript}`, 'info');
+
+          // 自動送信
+          ws.send(JSON.stringify({
+            type: 'text',
+            data: transcript,
+          }));
+        } else {
+          document.getElementById('voiceStatus').textContent = `認識中: ${transcript}`;
+        }
+      };
+
+      recognition.onerror = (event) => {
+        addLog(`❌ 音声認識エラー: ${event.error}`, 'error');
+        stopVoiceRecognition();
+      };
+
+      recognition.onend = () => {
+        if (isRecognizing) {
+          recognition.start(); // 継続
+        }
+      };
+
+      recognition.start();
+    }
+
+    function stopVoiceRecognition() {
+      if (recognition) {
+        isRecognizing = false;
+        recognition.stop();
+        document.getElementById('voiceBtn').textContent = '🎤 音声認識開始';
+        document.getElementById('voiceBtn').classList.remove('recording');
+        document.getElementById('voiceStatus').textContent = '';
+        addLog('🛑 音声認識停止', 'info');
+      }
+    }
+
+    // 履歴クリア
+    function clearHistory() {
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        alert('先に接続してください');
+        return;
+      }
+
+      ws.send(JSON.stringify({
+        type: 'clear_history',
+      }));
+    }
+
+    // 統計情報取得
+    function getStats() {
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        alert('先に接続してください');
+        return;
+      }
+
+      ws.send(JSON.stringify({
+        type: 'get_stats',
+      }));
+    }
+
+    // ログ追加
+    function addLog(message, type = 'info') {
+      const logContainer = document.getElementById('log');
+      const entry = document.createElement('div');
+      entry.className = `log-entry ${type}`;
+      entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+      logContainer.appendChild(entry);
+      logContainer.scrollTop = logContainer.scrollHeight;
+    }
+
+    // ログクリア
+    function clearLog() {
+      document.getElementById('log').innerHTML = '';
+    }
+
+    // Enterキーで送信
+    document.getElementById('textInput').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        sendText();
+      }
+    });
+  </script>
+</body>
+</html>

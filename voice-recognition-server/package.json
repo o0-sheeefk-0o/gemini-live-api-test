@@ -1,0 +1,28 @@
+{
+  "name": "voice-recognition-server",
+  "version": "1.0.0",
+  "description": "Gemini Live API based voice recognition server with wake word detection and tool execution",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "keywords": [
+    "gemini",
+    "live-api",
+    "voice-recognition",
+    "wake-word",
+    "websocket"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@google/genai": "^1.37.0",
+    "ws": "^8.18.0",
+    "dotenv": "^16.4.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
