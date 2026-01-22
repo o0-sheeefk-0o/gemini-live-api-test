@@ -1,606 +1,645 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ja">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>音声認識サーバ テストクライアント（音声ストリーミング対応）</title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      padding: 20px;
-    }
-
-    .container {
-      background: white;
-      border-radius: 20px;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-      max-width: 900px;
-      width: 100%;
-      padding: 40px;
-    }
-
-    h1 {
-      color: #667eea;
-      margin-bottom: 10px;
-      font-size: 24px;
-    }
-
-    .subtitle {
-      color: #666;
-      font-size: 14px;
-      margin-bottom: 20px;
-    }
-
-    .status {
-      display: inline-block;
-      padding: 8px 16px;
-      border-radius: 20px;
-      font-size: 14px;
-      margin-bottom: 20px;
-      font-weight: 600;
-    }
-
-    .status.disconnected {
-      background: #fee;
-      color: #c33;
-    }
-
-    .status.connected {
-      background: #efe;
-      color: #3c3;
-    }
-
-    .status.recording {
-      background: #fff3e0;
-      color: #e65100;
-      animation: pulse 1.5s infinite;
-    }
-
-    .section {
-      margin-bottom: 30px;
-    }
-
-    .section-title {
-      font-size: 18px;
-      font-weight: 600;
-      color: #333;
-      margin-bottom: 15px;
-    }
-
-    .controls {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    button {
-      padding: 12px 24px;
-      border: none;
-      border-radius: 8px;
-      font-size: 16px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.3s;
-    }
-
-    button:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    }
-
-    button:active {
-      transform: translateY(0);
-    }
-
-    button:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-      transform: none;
-    }
-
-    .btn-primary {
-      background: #667eea;
-      color: white;
-    }
-
-    .btn-secondary {
-      background: #f0f0f0;
-      color: #333;
-    }
-
-    .btn-danger {
-      background: #e74c3c;
-      color: white;
-    }
-
-    .btn-success {
-      background: #27ae60;
-      color: white;
-    }
-
-    .btn-recording {
-      background: #e74c3c;
-      color: white;
-      animation: pulse 1.5s infinite;
-    }
-
-    .input-group {
-      display: flex;
-      gap: 10px;
-      margin-bottom: 20px;
-    }
-
-    input[type="text"] {
-      flex: 1;
-      padding: 12px;
-      border: 2px solid #e0e0e0;
-      border-radius: 8px;
-      font-size: 16px;
-    }
-
-    input[type="text"]:focus {
-      outline: none;
-      border-color: #667eea;
-    }
-
-    .log-container {
-      background: #f8f9fa;
-      border-radius: 8px;
-      padding: 20px;
-      max-height: 300px;
-      overflow-y: auto;
-      font-family: 'Courier New', monospace;
-      font-size: 13px;
-    }
-
-    .log-entry {
-      margin-bottom: 6px;
-      padding: 6px 8px;
-      border-radius: 4px;
-    }
-
-    .log-entry.info {
-      background: #e3f2fd;
-      color: #1565c0;
-    }
-
-    .log-entry.success {
-      background: #e8f5e9;
-      color: #2e7d32;
-    }
-
-    .log-entry.error {
-      background: #ffebee;
-      color: #c62828;
-    }
-
-    .log-entry.audio {
-      background: #fff3e0;
-      color: #e65100;
-    }
-
-    .log-entry.transcript {
-      background: #f3e5f5;
-      color: #7b1fa2;
-    }
-
-    .audio-info {
-      background: #f0f0f0;
-      padding: 15px;
-      border-radius: 8px;
-      margin-bottom: 20px;
-      font-size: 14px;
-    }
-
-    .audio-info strong {
-      color: #667eea;
-    }
-
-    .visualizer-container {
-      margin-bottom: 20px;
-    }
-
-    #audioVisualizer {
-      width: 100%;
-      height: 60px;
-      background: #1a1a2e;
-      border-radius: 8px;
-    }
-
-    @keyframes pulse {
-      0%, 100% {
-        opacity: 1;
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>音声認識サーバ テストクライアント（音声ストリーミング対応）</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
       }
-      50% {
-        opacity: 0.6;
+
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 20px;
       }
-    }
 
-    .transcript-box {
-      background: #f8f9fa;
-      border-radius: 8px;
-      padding: 15px;
-      margin-bottom: 20px;
-      min-height: 60px;
-    }
+      .container {
+        background: white;
+        border-radius: 20px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        max-width: 900px;
+        width: 100%;
+        padding: 40px;
+      }
 
-    .transcript-label {
-      font-size: 12px;
-      color: #666;
-      margin-bottom: 5px;
-    }
+      h1 {
+        color: #667eea;
+        margin-bottom: 10px;
+        font-size: 24px;
+      }
 
-    .transcript-text {
-      font-size: 16px;
-      color: #333;
-    }
+      .subtitle {
+        color: #666;
+        font-size: 14px;
+        margin-bottom: 20px;
+      }
 
-    .transcript-text.input {
-      color: #1565c0;
-    }
+      .status {
+        display: inline-block;
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-size: 14px;
+        margin-bottom: 20px;
+        font-weight: 600;
+      }
 
-    .transcript-text.output {
-      color: #2e7d32;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <h1>🎤 音声認識サーバ テストクライアント</h1>
-    <p class="subtitle">Gemini Live API - 音声ストリーミング対応</p>
-    <div id="status" class="status disconnected">未接続</div>
+      .status.disconnected {
+        background: #fee;
+        color: #c33;
+      }
 
-    <div class="audio-info">
-      <strong>音声フォーマット:</strong><br>
-      入力: PCM 16bit 16kHz mono<br>
-      出力: PCM 16bit 24kHz mono<br>
-      <small>※ マイクから直接音声をストリーミングします</small>
-    </div>
+      .status.connected {
+        background: #efe;
+        color: #3c3;
+      }
 
-    <div class="section">
-      <div class="section-title">接続</div>
-      <div class="controls">
-        <button id="connectBtn" class="btn-primary" onclick="connect()">接続</button>
-        <button id="disconnectBtn" class="btn-secondary" onclick="disconnect()" disabled>切断</button>
-      </div>
-    </div>
+      .status.recording {
+        background: #fff3e0;
+        color: #e65100;
+        animation: pulse 1.5s infinite;
+      }
 
-    <div class="section">
-      <div class="section-title">音声入力</div>
-      <div class="visualizer-container">
-        <canvas id="audioVisualizer"></canvas>
-      </div>
-      <div class="controls">
-        <button id="micBtn" class="btn-primary" onclick="toggleMicrophone()" disabled>🎤 マイク開始</button>
-        <span id="micStatus" style="line-height: 48px; margin-left: 10px;"></span>
-      </div>
-    </div>
+      .section {
+        margin-bottom: 30px;
+      }
 
-    <div class="section">
-      <div class="section-title">トランスクリプト</div>
-      <div class="transcript-box">
-        <div class="transcript-label">あなた（入力）:</div>
-        <div id="inputTranscript" class="transcript-text input">-</div>
-      </div>
-      <div class="transcript-box">
-        <div class="transcript-label">Gemini（応答）:</div>
-        <div id="outputTranscript" class="transcript-text output">-</div>
-      </div>
-    </div>
+      .section-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 15px;
+      }
 
-    <div class="section">
-      <div class="section-title">テキスト入力（テスト用）</div>
-      <div class="input-group">
-        <input type="text" id="textInput" placeholder="テキストを入力..." />
-        <button class="btn-success" onclick="sendText()" id="sendTextBtn" disabled>送信</button>
-      </div>
-    </div>
+      .controls {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
 
-    <div class="section">
-      <div class="section-title">ログ</div>
-      <div class="controls" style="margin-bottom: 10px;">
-        <button class="btn-danger" onclick="clearLog()">ログクリア</button>
-      </div>
-      <div id="log" class="log-container"></div>
-    </div>
-  </div>
+      button {
+        padding: 12px 24px;
+        border: none;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s;
+      }
 
-  <script>
-    // グローバル変数
-    let ws = null;
-    let audioContext = null;
-    let mediaStream = null;
-    let audioWorkletNode = null;
-    let isMicrophoneActive = false;
+      button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      }
 
-    // 音声再生用
-    let playbackContext = null;
-    let audioQueue = [];
-    let isPlaying = false;
+      button:active {
+        transform: translateY(0);
+      }
 
-    // ビジュアライザー
-    let analyser = null;
-    let visualizerCanvas = null;
-    let visualizerCtx = null;
-    let animationId = null;
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none;
+      }
 
-    // 初期化
-    window.onload = () => {
-      visualizerCanvas = document.getElementById('audioVisualizer');
-      visualizerCtx = visualizerCanvas.getContext('2d');
-      resizeCanvas();
-      drawIdleVisualizer();
-    };
+      .btn-primary {
+        background: #667eea;
+        color: white;
+      }
 
-    window.onresize = resizeCanvas;
+      .btn-secondary {
+        background: #f0f0f0;
+        color: #333;
+      }
 
-    function resizeCanvas() {
-      visualizerCanvas.width = visualizerCanvas.offsetWidth;
-      visualizerCanvas.height = visualizerCanvas.offsetHeight;
-    }
+      .btn-danger {
+        background: #e74c3c;
+        color: white;
+      }
 
-    // WebSocket接続
-    function connect() {
-      const url = 'ws://localhost:8080';
-      addLog(`接続中: ${url}`, 'info');
+      .btn-success {
+        background: #27ae60;
+        color: white;
+      }
 
-      ws = new WebSocket(url);
-      ws.binaryType = 'arraybuffer';
+      .btn-recording {
+        background: #e74c3c;
+        color: white;
+        animation: pulse 1.5s infinite;
+      }
 
-      ws.onopen = () => {
-        addLog('WebSocket接続成功', 'success');
-      };
+      .input-group {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+      }
 
-      ws.onmessage = (event) => {
-        if (event.data instanceof ArrayBuffer) {
-          // バイナリデータ = 音声応答
-          handleAudioResponse(event.data);
-        } else {
-          // テキストデータ = JSONメッセージ
-          const message = JSON.parse(event.data);
-          handleMessage(message);
+      input[type="text"] {
+        flex: 1;
+        padding: 12px;
+        border: 2px solid #e0e0e0;
+        border-radius: 8px;
+        font-size: 16px;
+      }
+
+      input[type="text"]:focus {
+        outline: none;
+        border-color: #667eea;
+      }
+
+      .log-container {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 20px;
+        max-height: 300px;
+        overflow-y: auto;
+        font-family: "Courier New", monospace;
+        font-size: 13px;
+      }
+
+      .log-entry {
+        margin-bottom: 6px;
+        padding: 6px 8px;
+        border-radius: 4px;
+      }
+
+      .log-entry.info {
+        background: #e3f2fd;
+        color: #1565c0;
+      }
+
+      .log-entry.success {
+        background: #e8f5e9;
+        color: #2e7d32;
+      }
+
+      .log-entry.error {
+        background: #ffebee;
+        color: #c62828;
+      }
+
+      .log-entry.audio {
+        background: #fff3e0;
+        color: #e65100;
+      }
+
+      .log-entry.transcript {
+        background: #f3e5f5;
+        color: #7b1fa2;
+      }
+
+      .audio-info {
+        background: #f0f0f0;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        font-size: 14px;
+      }
+
+      .audio-info strong {
+        color: #667eea;
+      }
+
+      .visualizer-container {
+        margin-bottom: 20px;
+      }
+
+      #audioVisualizer {
+        width: 100%;
+        height: 60px;
+        background: #1a1a2e;
+        border-radius: 8px;
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
         }
-      };
-
-      ws.onerror = (error) => {
-        addLog(`WebSocketエラー`, 'error');
-        console.error('WebSocket error:', error);
-      };
-
-      ws.onclose = () => {
-        addLog('切断されました', 'error');
-        updateStatus('disconnected', '未接続');
-        document.getElementById('connectBtn').disabled = false;
-        document.getElementById('disconnectBtn').disabled = true;
-        document.getElementById('micBtn').disabled = true;
-        document.getElementById('sendTextBtn').disabled = true;
-        stopMicrophone();
-      };
-    }
-
-    // WebSocket切断
-    function disconnect() {
-      stopMicrophone();
-      if (ws) {
-        ws.close();
-        ws = null;
+        50% {
+          opacity: 0.6;
+        }
       }
-    }
 
-    // メッセージ処理
-    function handleMessage(message) {
-      switch (message.type) {
-        case 'connected':
-          addLog(`接続完了 (ID: ${message.clientId})`, 'success');
-          updateStatus('connected', '接続済み');
-          document.getElementById('connectBtn').disabled = true;
-          document.getElementById('disconnectBtn').disabled = false;
-          document.getElementById('micBtn').disabled = false;
-          document.getElementById('sendTextBtn').disabled = false;
-          break;
+      .transcript-box {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 20px;
+        min-height: 60px;
+      }
 
-        case 'text':
-          addLog(`テキスト応答: ${message.data}`, 'info');
-          break;
+      .transcript-label {
+        font-size: 12px;
+        color: #666;
+        margin-bottom: 5px;
+      }
 
-        case 'transcript':
-          if (message.direction === 'input') {
-            document.getElementById('inputTranscript').textContent = message.data;
-            addLog(`入力認識: ${message.data}`, 'transcript');
+      .transcript-text {
+        font-size: 16px;
+        color: #333;
+      }
+
+      .transcript-text.input {
+        color: #1565c0;
+      }
+
+      .transcript-text.output {
+        color: #2e7d32;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🎤 音声認識サーバ テストクライアント</h1>
+      <p class="subtitle">Gemini Live API - 音声ストリーミング対応</p>
+      <div id="status" class="status disconnected">未接続</div>
+
+      <div class="audio-info">
+        <strong>音声フォーマット:</strong><br />
+        入力: PCM 16bit 16kHz mono<br />
+        出力: PCM 16bit 24kHz mono<br />
+        <small>※ マイクから直接音声をストリーミングします</small>
+      </div>
+
+      <div class="section">
+        <div class="section-title">接続</div>
+        <div class="controls">
+          <button id="connectBtn" class="btn-primary" onclick="connect()">
+            接続
+          </button>
+          <button
+            id="disconnectBtn"
+            class="btn-secondary"
+            onclick="disconnect()"
+            disabled
+          >
+            切断
+          </button>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">音声入力</div>
+        <div class="visualizer-container">
+          <canvas id="audioVisualizer"></canvas>
+        </div>
+        <div class="controls">
+          <button
+            id="micBtn"
+            class="btn-primary"
+            onclick="toggleMicrophone()"
+            disabled
+          >
+            🎤 マイク開始
+          </button>
+          <span
+            id="micStatus"
+            style="line-height: 48px; margin-left: 10px"
+          ></span>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">トランスクリプト</div>
+        <div class="transcript-box">
+          <div class="transcript-label">あなた（入力）:</div>
+          <div id="inputTranscript" class="transcript-text input">-</div>
+        </div>
+        <div class="transcript-box">
+          <div class="transcript-label">Gemini（応答）:</div>
+          <div id="outputTranscript" class="transcript-text output">-</div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">テキスト入力（テスト用）</div>
+        <div class="input-group">
+          <input type="text" id="textInput" placeholder="テキストを入力..." />
+          <button
+            class="btn-success"
+            onclick="sendText()"
+            id="sendTextBtn"
+            disabled
+          >
+            送信
+          </button>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">ログ</div>
+        <div class="controls" style="margin-bottom: 10px">
+          <button class="btn-danger" onclick="clearLog()">ログクリア</button>
+        </div>
+        <div id="log" class="log-container"></div>
+      </div>
+    </div>
+
+    <script>
+      // グローバル変数
+      let ws = null;
+      let audioContext = null;
+      let mediaStream = null;
+      let audioWorkletNode = null;
+      let isMicrophoneActive = false;
+
+      // 音声再生用
+      let playbackContext = null;
+      let audioQueue = [];
+      let isPlaying = false;
+
+      // ビジュアライザー
+      let analyser = null;
+      let visualizerCanvas = null;
+      let visualizerCtx = null;
+      let animationId = null;
+
+      // 初期化
+      window.onload = () => {
+        visualizerCanvas = document.getElementById("audioVisualizer");
+        visualizerCtx = visualizerCanvas.getContext("2d");
+        resizeCanvas();
+        drawIdleVisualizer();
+      };
+
+      window.onresize = resizeCanvas;
+
+      function resizeCanvas() {
+        visualizerCanvas.width = visualizerCanvas.offsetWidth;
+        visualizerCanvas.height = visualizerCanvas.offsetHeight;
+      }
+
+      // WebSocket接続
+      function connect() {
+        const url = "ws://localhost:8080";
+        addLog(`接続中: ${url}`, "info");
+
+        ws = new WebSocket(url);
+        ws.binaryType = "arraybuffer";
+
+        ws.onopen = () => {
+          addLog("WebSocket接続成功", "success");
+        };
+
+        ws.onmessage = (event) => {
+          if (event.data instanceof ArrayBuffer) {
+            // バイナリデータ = 音声応答
+            handleAudioResponse(event.data);
           } else {
-            document.getElementById('outputTranscript').textContent = message.data;
-            addLog(`応答認識: ${message.data}`, 'transcript');
+            // テキストデータ = JSONメッセージ
+            const message = JSON.parse(event.data);
+            handleMessage(message);
           }
-          break;
+        };
 
-        case 'tool_call':
-          addLog(`ツール呼び出し: ${message.data.name}`, 'info');
-          break;
+        ws.onerror = (error) => {
+          addLog(`WebSocketエラー`, "error");
+          console.error("WebSocket error:", error);
+        };
 
-        case 'turn_complete':
-          addLog('ターン完了', 'success');
-          break;
-
-        case 'error':
-          addLog(`エラー: ${message.message}`, 'error');
-          break;
-
-        default:
-          addLog(`${message.type}: ${JSON.stringify(message)}`, 'info');
-      }
-    }
-
-    // 音声応答を処理
-    function handleAudioResponse(arrayBuffer) {
-      // 音声データをキューに追加
-      audioQueue.push(arrayBuffer);
-      addLog(`音声チャンク受信: ${arrayBuffer.byteLength} bytes`, 'audio');
-
-      // 再生開始
-      if (!isPlaying) {
-        playNextAudio();
-      }
-    }
-
-    // 音声を再生
-    async function playNextAudio() {
-      if (audioQueue.length === 0) {
-        isPlaying = false;
-        return;
+        ws.onclose = () => {
+          addLog("切断されました", "error");
+          updateStatus("disconnected", "未接続");
+          document.getElementById("connectBtn").disabled = false;
+          document.getElementById("disconnectBtn").disabled = true;
+          document.getElementById("micBtn").disabled = true;
+          document.getElementById("sendTextBtn").disabled = true;
+          stopMicrophone();
+        };
       }
 
-      isPlaying = true;
-
-      // 再生コンテキストを作成
-      if (!playbackContext) {
-        playbackContext = new AudioContext({ sampleRate: 24000 });
+      // WebSocket切断
+      function disconnect() {
+        stopMicrophone();
+        if (ws) {
+          ws.close();
+          ws = null;
+        }
       }
 
-      const arrayBuffer = audioQueue.shift();
+      // メッセージ処理
+      function handleMessage(message) {
+        switch (message.type) {
+          case "connected":
+            addLog(`接続完了 (ID: ${message.clientId})`, "success");
+            updateStatus("connected", "接続済み");
+            document.getElementById("connectBtn").disabled = true;
+            document.getElementById("disconnectBtn").disabled = false;
+            document.getElementById("micBtn").disabled = false;
+            document.getElementById("sendTextBtn").disabled = false;
+            break;
 
-      try {
-        // PCM 16bit を Float32 に変換
-        const int16Array = new Int16Array(arrayBuffer);
-        const float32Array = new Float32Array(int16Array.length);
+          case "text":
+            addLog(`テキスト応答: ${message.data}`, "info");
+            break;
 
-        for (let i = 0; i < int16Array.length; i++) {
-          float32Array[i] = int16Array[i] / 32768.0;
+          case "transcript":
+            if (message.direction === "input") {
+              document.getElementById("inputTranscript").textContent =
+                message.data;
+              addLog(`入力認識: ${message.data}`, "transcript");
+            } else {
+              document.getElementById("outputTranscript").textContent =
+                message.data;
+              addLog(`応答認識: ${message.data}`, "transcript");
+            }
+            break;
+
+          case "tool_call":
+            addLog(`ツール呼び出し: ${message.data.name}`, "info");
+            break;
+
+          case "turn_complete":
+            addLog("ターン完了", "success");
+            break;
+
+          case "error":
+            addLog(`エラー: ${message.message}`, "error");
+            break;
+
+          default:
+            addLog(`${message.type}: ${JSON.stringify(message)}`, "info");
+        }
+      }
+
+      // 音声応答を処理
+      function handleAudioResponse(arrayBuffer) {
+        // 音声データをキューに追加
+        audioQueue.push(arrayBuffer);
+        addLog(`音声チャンク受信: ${arrayBuffer.byteLength} bytes`, "audio");
+
+        // 再生開始
+        if (!isPlaying) {
+          playNextAudio();
+        }
+      }
+
+      // 音声を再生
+      async function playNextAudio() {
+        if (audioQueue.length === 0) {
+          isPlaying = false;
+          return;
         }
 
-        // AudioBuffer を作成
-        const audioBuffer = playbackContext.createBuffer(1, float32Array.length, 24000);
-        audioBuffer.getChannelData(0).set(float32Array);
+        isPlaying = true;
 
-        // 再生
-        const source = playbackContext.createBufferSource();
-        source.buffer = audioBuffer;
-        source.connect(playbackContext.destination);
-        source.onended = () => {
+        // 再生コンテキストを作成
+        if (!playbackContext) {
+          playbackContext = new AudioContext({ sampleRate: 24000 });
+        }
+
+        const arrayBuffer = audioQueue.shift();
+
+        try {
+          // PCM 16bit を Float32 に変換
+          const int16Array = new Int16Array(arrayBuffer);
+          const float32Array = new Float32Array(int16Array.length);
+
+          for (let i = 0; i < int16Array.length; i++) {
+            float32Array[i] = int16Array[i] / 32768.0;
+          }
+
+          // AudioBuffer を作成
+          const audioBuffer = playbackContext.createBuffer(
+            1,
+            float32Array.length,
+            24000,
+          );
+          audioBuffer.getChannelData(0).set(float32Array);
+
+          // 再生
+          const source = playbackContext.createBufferSource();
+          source.buffer = audioBuffer;
+          source.connect(playbackContext.destination);
+          source.onended = () => {
+            playNextAudio();
+          };
+          source.start();
+        } catch (error) {
+          console.error("Audio playback error:", error);
+          isPlaying = false;
           playNextAudio();
-        };
-        source.start();
-      } catch (error) {
-        console.error('Audio playback error:', error);
-        isPlaying = false;
-        playNextAudio();
-      }
-    }
-
-    // マイクの開始/停止
-    async function toggleMicrophone() {
-      if (isMicrophoneActive) {
-        stopMicrophone();
-      } else {
-        await startMicrophone();
-      }
-    }
-
-    // マイク開始
-    async function startMicrophone() {
-      try {
-        // AudioContextを作成（16kHzでリサンプリングするため48kHzで取得）
-        audioContext = new AudioContext({ sampleRate: 48000 });
-
-        // マイクストリームを取得
-        mediaStream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            channelCount: 1,
-            sampleRate: 48000,
-            echoCancellation: true,
-            noiseSuppression: true,
-          }
-        });
-
-        // AudioWorkletを使用して音声を処理
-        await audioContext.audioWorklet.addModule(createAudioWorkletProcessor());
-
-        const source = audioContext.createMediaStreamSource(mediaStream);
-
-        // アナライザーを作成（ビジュアライザー用）
-        analyser = audioContext.createAnalyser();
-        analyser.fftSize = 256;
-        source.connect(analyser);
-
-        // AudioWorkletNodeを作成
-        audioWorkletNode = new AudioWorkletNode(audioContext, 'audio-processor');
-
-        // 音声データを受信してWebSocketに送信
-        audioWorkletNode.port.onmessage = (event) => {
-          if (ws && ws.readyState === WebSocket.OPEN && event.data) {
-            // Int16Array を ArrayBuffer として送信
-            ws.send(event.data.buffer);
-          }
-        };
-
-        source.connect(audioWorkletNode);
-
-        isMicrophoneActive = true;
-        document.getElementById('micBtn').textContent = '🔴 マイク停止';
-        document.getElementById('micBtn').className = 'btn-recording';
-        document.getElementById('micStatus').textContent = '録音中...';
-        updateStatus('recording', '録音中');
-
-        // ビジュアライザー開始
-        startVisualizer();
-
-        addLog('マイク開始', 'success');
-      } catch (error) {
-        addLog(`マイクエラー: ${error.message}`, 'error');
-        console.error('Microphone error:', error);
-      }
-    }
-
-    // マイク停止
-    function stopMicrophone() {
-      if (animationId) {
-        cancelAnimationFrame(animationId);
-        animationId = null;
+        }
       }
 
-      if (audioWorkletNode) {
-        audioWorkletNode.disconnect();
-        audioWorkletNode = null;
+      // マイクの開始/停止
+      async function toggleMicrophone() {
+        if (isMicrophoneActive) {
+          stopMicrophone();
+        } else {
+          await startMicrophone();
+        }
       }
 
-      if (mediaStream) {
-        mediaStream.getTracks().forEach(track => track.stop());
-        mediaStream = null;
+      // マイク開始
+      async function startMicrophone() {
+        try {
+          // AudioContextを作成（16kHzでリサンプリングするため48kHzで取得）
+          audioContext = new AudioContext({ sampleRate: 48000 });
+
+          // マイクストリームを取得
+          mediaStream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              channelCount: 1,
+              sampleRate: 48000,
+              echoCancellation: true,
+              noiseSuppression: true,
+            },
+          });
+
+          // AudioWorkletを使用して音声を処理
+          await audioContext.audioWorklet.addModule(
+            createAudioWorkletProcessor(),
+          );
+
+          const source = audioContext.createMediaStreamSource(mediaStream);
+
+          // アナライザーを作成（ビジュアライザー用）
+          analyser = audioContext.createAnalyser();
+          analyser.fftSize = 256;
+          source.connect(analyser);
+
+          // AudioWorkletNodeを作成
+          audioWorkletNode = new AudioWorkletNode(
+            audioContext,
+            "audio-processor",
+          );
+
+          // 音声データを受信してWebSocketに送信
+          audioWorkletNode.port.onmessage = (event) => {
+            if (ws && ws.readyState === WebSocket.OPEN && event.data) {
+              console.log("sending audio data");
+              // Int16Array を ArrayBuffer として送信
+              ws.send(event.data.buffer);
+            }
+          };
+
+          source.connect(audioWorkletNode);
+
+          isMicrophoneActive = true;
+          document.getElementById("micBtn").textContent = "🔴 マイク停止";
+          document.getElementById("micBtn").className = "btn-recording";
+          document.getElementById("micStatus").textContent = "録音中...";
+          updateStatus("recording", "録音中");
+
+          // ビジュアライザー開始
+          startVisualizer();
+
+          addLog("マイク開始", "success");
+        } catch (error) {
+          addLog(`マイクエラー: ${error.message}`, "error");
+          console.error("Microphone error:", error);
+        }
       }
 
-      if (audioContext) {
-        audioContext.close();
-        audioContext = null;
+      // マイク停止
+      function stopMicrophone() {
+        if (animationId) {
+          cancelAnimationFrame(animationId);
+          animationId = null;
+        }
+
+        if (audioWorkletNode) {
+          audioWorkletNode.disconnect();
+          audioWorkletNode = null;
+        }
+
+        if (mediaStream) {
+          mediaStream.getTracks().forEach((track) => track.stop());
+          mediaStream = null;
+        }
+
+        if (audioContext) {
+          audioContext.close();
+          audioContext = null;
+        }
+
+        analyser = null;
+        isMicrophoneActive = false;
+
+        document.getElementById("micBtn").textContent = "🎤 マイク開始";
+        document.getElementById("micBtn").className = "btn-primary";
+        document.getElementById("micStatus").textContent = "";
+
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          updateStatus("connected", "接続済み");
+        }
+
+        drawIdleVisualizer();
+        addLog("マイク停止", "info");
       }
 
-      analyser = null;
-      isMicrophoneActive = false;
-
-      document.getElementById('micBtn').textContent = '🎤 マイク開始';
-      document.getElementById('micBtn').className = 'btn-primary';
-      document.getElementById('micStatus').textContent = '';
-
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        updateStatus('connected', '接続済み');
-      }
-
-      drawIdleVisualizer();
-      addLog('マイク停止', 'info');
-    }
-
-    // AudioWorkletProcessorをBlobとして作成
-    function createAudioWorkletProcessor() {
-      const processorCode = `
+      // AudioWorkletProcessorをBlobとして作成
+      function createAudioWorkletProcessor() {
+        const processorCode = `
         class AudioProcessor extends AudioWorkletProcessor {
           constructor() {
             super();
@@ -654,106 +693,134 @@
         registerProcessor('audio-processor', AudioProcessor);
       `;
 
-      const blob = new Blob([processorCode], { type: 'application/javascript' });
-      return URL.createObjectURL(blob);
-    }
+        const blob = new Blob([processorCode], {
+          type: "application/javascript",
+        });
+        return URL.createObjectURL(blob);
+      }
 
-    // ビジュアライザー
-    function startVisualizer() {
-      if (!analyser) return;
+      // ビジュアライザー
+      function startVisualizer() {
+        if (!analyser) return;
 
-      const bufferLength = analyser.frequencyBinCount;
-      const dataArray = new Uint8Array(bufferLength);
+        const bufferLength = analyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
 
-      function draw() {
-        animationId = requestAnimationFrame(draw);
+        function draw() {
+          animationId = requestAnimationFrame(draw);
 
-        analyser.getByteFrequencyData(dataArray);
+          analyser.getByteFrequencyData(dataArray);
 
-        visualizerCtx.fillStyle = '#1a1a2e';
-        visualizerCtx.fillRect(0, 0, visualizerCanvas.width, visualizerCanvas.height);
+          visualizerCtx.fillStyle = "#1a1a2e";
+          visualizerCtx.fillRect(
+            0,
+            0,
+            visualizerCanvas.width,
+            visualizerCanvas.height,
+          );
 
-        const barWidth = (visualizerCanvas.width / bufferLength) * 2.5;
-        let x = 0;
+          const barWidth = (visualizerCanvas.width / bufferLength) * 2.5;
+          let x = 0;
 
-        for (let i = 0; i < bufferLength; i++) {
-          const barHeight = (dataArray[i] / 255) * visualizerCanvas.height;
+          for (let i = 0; i < bufferLength; i++) {
+            const barHeight = (dataArray[i] / 255) * visualizerCanvas.height;
 
-          const gradient = visualizerCtx.createLinearGradient(0, visualizerCanvas.height, 0, 0);
-          gradient.addColorStop(0, '#667eea');
-          gradient.addColorStop(1, '#764ba2');
+            const gradient = visualizerCtx.createLinearGradient(
+              0,
+              visualizerCanvas.height,
+              0,
+              0,
+            );
+            gradient.addColorStop(0, "#667eea");
+            gradient.addColorStop(1, "#764ba2");
 
-          visualizerCtx.fillStyle = gradient;
-          visualizerCtx.fillRect(x, visualizerCanvas.height - barHeight, barWidth, barHeight);
+            visualizerCtx.fillStyle = gradient;
+            visualizerCtx.fillRect(
+              x,
+              visualizerCanvas.height - barHeight,
+              barWidth,
+              barHeight,
+            );
 
-          x += barWidth + 1;
+            x += barWidth + 1;
+          }
         }
+
+        draw();
       }
 
-      draw();
-    }
+      function drawIdleVisualizer() {
+        visualizerCtx.fillStyle = "#1a1a2e";
+        visualizerCtx.fillRect(
+          0,
+          0,
+          visualizerCanvas.width,
+          visualizerCanvas.height,
+        );
 
-    function drawIdleVisualizer() {
-      visualizerCtx.fillStyle = '#1a1a2e';
-      visualizerCtx.fillRect(0, 0, visualizerCanvas.width, visualizerCanvas.height);
-
-      visualizerCtx.fillStyle = '#333';
-      visualizerCtx.font = '14px sans-serif';
-      visualizerCtx.textAlign = 'center';
-      visualizerCtx.fillText('マイクを開始すると音声レベルが表示されます', visualizerCanvas.width / 2, visualizerCanvas.height / 2 + 5);
-    }
-
-    // テキスト送信
-    function sendText() {
-      const input = document.getElementById('textInput');
-      const text = input.value.trim();
-
-      if (!text) {
-        return;
+        visualizerCtx.fillStyle = "#333";
+        visualizerCtx.font = "14px sans-serif";
+        visualizerCtx.textAlign = "center";
+        visualizerCtx.fillText(
+          "マイクを開始すると音声レベルが表示されます",
+          visualizerCanvas.width / 2,
+          visualizerCanvas.height / 2 + 5,
+        );
       }
 
-      if (!ws || ws.readyState !== WebSocket.OPEN) {
-        addLog('先に接続してください', 'error');
-        return;
+      // テキスト送信
+      function sendText() {
+        const input = document.getElementById("textInput");
+        const text = input.value.trim();
+
+        if (!text) {
+          return;
+        }
+
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+          addLog("先に接続してください", "error");
+          return;
+        }
+
+        addLog(`送信: ${text}`, "info");
+        ws.send(
+          JSON.stringify({
+            type: "text",
+            data: text,
+          }),
+        );
+
+        input.value = "";
       }
 
-      addLog(`送信: ${text}`, 'info');
-      ws.send(JSON.stringify({
-        type: 'text',
-        data: text,
-      }));
-
-      input.value = '';
-    }
-
-    // ステータス更新
-    function updateStatus(className, text) {
-      const status = document.getElementById('status');
-      status.className = `status ${className}`;
-      status.textContent = text;
-    }
-
-    // ログ追加
-    function addLog(message, type = 'info') {
-      const logContainer = document.getElementById('log');
-      const entry = document.createElement('div');
-      entry.className = `log-entry ${type}`;
-      entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
-      logContainer.appendChild(entry);
-      logContainer.scrollTop = logContainer.scrollHeight;
-    }
-
-    // ログクリア
-    function clearLog() {
-      document.getElementById('log').innerHTML = '';
-    }
-
-    // Enterキーでテキスト送信
-    document.getElementById('textInput').addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') {
-        sendText();
+      // ステータス更新
+      function updateStatus(className, text) {
+        const status = document.getElementById("status");
+        status.className = `status ${className}`;
+        status.textContent = text;
       }
-    });
-  </script>
-</body>
+
+      // ログ追加
+      function addLog(message, type = "info") {
+        const logContainer = document.getElementById("log");
+        const entry = document.createElement("div");
+        entry.className = `log-entry ${type}`;
+        entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+        logContainer.appendChild(entry);
+        logContainer.scrollTop = logContainer.scrollHeight;
+      }
+
+      // ログクリア
+      function clearLog() {
+        document.getElementById("log").innerHTML = "";
+      }
+
+      // Enterキーでテキスト送信
+      document.getElementById("textInput").addEventListener("keypress", (e) => {
+        if (e.key === "Enter") {
+          sendText();
+        }
+      });
+    </script>
+  </body>
 </html>

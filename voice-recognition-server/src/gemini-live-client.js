@@ -3,9 +3,9 @@
  * @google/genai パッケージを使用
  */
 
-import { GoogleGenAI, Modality } from '@google/genai';
-import { config } from './config.js';
-import { getToolDefinitions, executeTools } from './tools/index.js';
+import { GoogleGenAI, Modality } from "@google/genai";
+import { config } from "./config.js";
+import { getToolDefinitions, executeTools } from "./tools/index.js";
 
 export class GeminiLiveClient {
   constructor() {
@@ -32,11 +32,11 @@ export class GeminiLiveClient {
    */
   async connect() {
     if (this.isConnected) {
-      console.log('⚠️ 既に接続されています');
+      console.log("⚠️ 既に接続されています");
       return;
     }
 
-    console.log('🚀 Gemini Live API に接続中...');
+    console.log("🚀 Gemini Live API に接続中...");
 
     try {
       const tools = getToolDefinitions();
@@ -49,7 +49,7 @@ export class GeminiLiveClient {
           speechConfig: {
             voiceConfig: {
               prebuiltVoiceConfig: {
-                voiceName: config.gemini.voiceName || 'Aoede',
+                voiceName: config.gemini.voiceName || "Aoede",
               },
             },
           },
@@ -57,20 +57,20 @@ export class GeminiLiveClient {
         tools: tools,
         callbacks: {
           onopen: () => {
-            console.log('✓ Gemini Live API 接続完了');
+            console.log("✓ Gemini Live API 接続完了");
             this.isConnected = true;
           },
           onmessage: (message) => {
             this._handleMessage(message);
           },
           onerror: (error) => {
-            console.error('❌ Gemini Live API エラー:', error);
+            console.error("❌ Gemini Live API エラー:", error);
             if (this.onError) {
               this.onError(error);
             }
           },
           onclose: (event) => {
-            console.log('🔌 Gemini Live API 切断:', event?.reason || 'unknown');
+            console.log("🔌 Gemini Live API 切断:", event?.reason || "unknown");
             this.isConnected = false;
             this.session = null;
           },
@@ -79,7 +79,7 @@ export class GeminiLiveClient {
 
       return true;
     } catch (error) {
-      console.error('❌ 接続エラー:', error);
+      console.error("❌ 接続エラー:", error);
       throw error;
     }
   }
@@ -92,7 +92,7 @@ export class GeminiLiveClient {
       try {
         this.session.close();
       } catch (error) {
-        console.error('❌ 切断エラー:', error);
+        console.error("❌ 切断エラー:", error);
       }
       this.session = null;
       this.isConnected = false;
@@ -105,24 +105,24 @@ export class GeminiLiveClient {
    */
   async sendAudio(audioData) {
     if (!this.session || !this.isConnected) {
-      console.warn('⚠️ セッションが接続されていません');
+      console.warn("[sendAudio]⚠️ セッションが接続されていません");
       return;
     }
 
     try {
       // Buffer を base64 に変換
       const base64Audio = Buffer.isBuffer(audioData)
-        ? audioData.toString('base64')
-        : Buffer.from(audioData).toString('base64');
+        ? audioData.toString("base64")
+        : Buffer.from(audioData).toString("base64");
 
       await this.session.sendRealtimeInput({
         media: {
-          mimeType: 'audio/pcm;rate=16000',
+          mimeType: "audio/pcm;rate=16000",
           data: base64Audio,
         },
       });
     } catch (error) {
-      console.error('❌ 音声送信エラー:', error);
+      console.error("❌ 音声送信エラー:", error);
       if (this.onError) {
         this.onError(error);
       }
@@ -135,18 +135,21 @@ export class GeminiLiveClient {
    */
   async sendText(text) {
     if (!this.session || !this.isConnected) {
-      console.warn('⚠️ セッションが接続されていません');
+      console.warn("⚠️ セッションが接続されていません");
       return;
     }
 
     console.log(`📝 テキスト送信: "${text}"`);
 
     try {
-      await this.session.send({
-        text: text,
-      }, { endOfTurn: true });
+      await this.session.send(
+        {
+          text: text,
+        },
+        { endOfTurn: true },
+      );
     } catch (error) {
-      console.error('❌ テキスト送信エラー:', error);
+      console.error("❌ テキスト送信エラー:", error);
       if (this.onError) {
         this.onError(error);
       }
@@ -160,22 +163,25 @@ export class GeminiLiveClient {
    */
   async sendToolResponse(functionCall, result) {
     if (!this.session || !this.isConnected) {
-      console.warn('⚠️ セッションが接続されていません');
+      console.warn("⚠️ セッションが接続されていません");
       return;
     }
 
     console.log(`📤 ツール結果送信: ${functionCall.name}`);
 
     try {
-      await this.session.send({
-        functionResponse: {
-          id: functionCall.id,
-          name: functionCall.name,
-          response: { result: result },
+      await this.session.send(
+        {
+          functionResponse: {
+            id: functionCall.id,
+            name: functionCall.name,
+            response: { result: result },
+          },
         },
-      }, { endOfTurn: true });
+        { endOfTurn: true },
+      );
     } catch (error) {
-      console.error('❌ ツール結果送信エラー:', error);
+      console.error("❌ ツール結果送信エラー:", error);
       if (this.onError) {
         this.onError(error);
       }
@@ -197,8 +203,11 @@ export class GeminiLiveClient {
 
         for (const part of parts) {
           // 音声応答
-          if (part.inlineData && part.inlineData.mimeType?.startsWith('audio/')) {
-            const audioData = Buffer.from(part.inlineData.data, 'base64');
+          if (
+            part.inlineData &&
+            part.inlineData.mimeType?.startsWith("audio/")
+          ) {
+            const audioData = Buffer.from(part.inlineData.data, "base64");
             if (this.onAudioChunk) {
               this.onAudioChunk(audioData, part.inlineData.mimeType);
             }
@@ -225,23 +234,27 @@ export class GeminiLiveClient {
 
       // 入力音声のトランスクリプト
       if (serverContent.inputTranscript) {
-        console.log(`🎤 入力トランスクリプト: ${serverContent.inputTranscript}`);
+        console.log(
+          `🎤 入力トランスクリプト: ${serverContent.inputTranscript}`,
+        );
         if (this.onTranscript) {
-          this.onTranscript(serverContent.inputTranscript, 'input');
+          this.onTranscript(serverContent.inputTranscript, "input");
         }
       }
 
       // 出力音声のトランスクリプト
       if (serverContent.outputTranscript) {
-        console.log(`🔊 出力トランスクリプト: ${serverContent.outputTranscript}`);
+        console.log(
+          `🔊 出力トランスクリプト: ${serverContent.outputTranscript}`,
+        );
         if (this.onTranscript) {
-          this.onTranscript(serverContent.outputTranscript, 'output');
+          this.onTranscript(serverContent.outputTranscript, "output");
         }
       }
 
       // ターン完了
       if (serverContent.turnComplete) {
-        console.log('✓ ターン完了');
+        console.log("✓ ターン完了");
         this._processPendingToolCalls();
         if (this.onTurnComplete) {
           this.onTurnComplete();
@@ -250,14 +263,16 @@ export class GeminiLiveClient {
 
       // 割り込み検知
       if (serverContent.interrupted) {
-        console.log('⚠️ 割り込み検知');
+        console.log("⚠️ 割り込み検知");
         this.pendingFunctionCalls = [];
       }
     }
 
     // ツール呼び出し（別形式）
     if (message.toolCall) {
-      console.log(`🔧 ツール呼び出し（toolCall形式）: ${message.toolCall.name}`);
+      console.log(
+        `🔧 ツール呼び出し（toolCall形式）: ${message.toolCall.name}`,
+      );
       this.pendingFunctionCalls.push(message.toolCall);
       if (this.onToolCall) {
         this.onToolCall(message.toolCall);
@@ -274,7 +289,9 @@ export class GeminiLiveClient {
       return;
     }
 
-    console.log(`\n🔧 ${this.pendingFunctionCalls.length}個のツールを実行中...`);
+    console.log(
+      `\n🔧 ${this.pendingFunctionCalls.length}個のツールを実行中...`,
+    );
 
     for (const functionCall of this.pendingFunctionCalls) {
       try {
