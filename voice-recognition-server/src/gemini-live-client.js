@@ -141,22 +141,51 @@ export class GeminiLiveClient {
   /**
    * テキストメッセージを送信
    * @param {string} text - テキストメッセージ
+   * @param {Object} options - オプション
+   * @param {boolean} options.expectResponse - 応答を期待するか（デフォルト: true）
    */
-  async sendText(text) {
+  async sendText(text, options = { expectResponse: true }) {
     if (!this.session || !this.isConnected) {
       console.warn("⚠️ セッションが接続されていません");
       return;
     }
 
-    console.log(`📝 テキスト送信: "${text}"`);
+    const expectResponse = options.expectResponse !== false;
+    console.log(`📝 テキスト送信: "${text}" (応答期待: ${expectResponse})`);
 
     try {
       await this.session.sendClientContent({
         turns: text,
-        turnComplete: true,
+        turnComplete: expectResponse,
       });
     } catch (error) {
       console.error("❌ テキスト送信エラー:", error);
+      if (this.onError) {
+        this.onError(error);
+      }
+    }
+  }
+
+  /**
+   * コンテキスト情報を送信（応答なし）
+   * 車両状態など、Geminiに認識させたいが応答は不要な情報を送る
+   * @param {string} contextInfo - コンテキスト情報
+   */
+  async sendContext(contextInfo) {
+    if (!this.session || !this.isConnected) {
+      console.warn("⚠️ セッションが接続されていません");
+      return;
+    }
+
+    console.log(`📊 コンテキスト送信: "${contextInfo}"`);
+
+    try {
+      await this.session.sendClientContent({
+        turns: contextInfo,
+        turnComplete: false, // 応答を期待しない
+      });
+    } catch (error) {
+      console.error("❌ コンテキスト送信エラー:", error);
       if (this.onError) {
         this.onError(error);
       }

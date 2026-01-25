@@ -335,6 +335,28 @@
       </div>
 
       <div class="section">
+        <div class="section-title">コンテキスト送信（車両情報など）</div>
+        <div class="input-group">
+          <input
+            type="text"
+            id="contextInput"
+            placeholder="例: 車両状態: 速度60km/h、燃料75%、車内温度22°C"
+          />
+          <button
+            class="btn-success"
+            onclick="sendContext()"
+            id="sendContextBtn"
+            disabled
+          >
+            コンテキスト送信
+          </button>
+        </div>
+        <div style="margin-top: 10px; font-size: 13px; color: #666;">
+          ℹ️ コンテキスト情報は音声応答なしでGeminiに送られます（記憶のみ）
+        </div>
+      </div>
+
+      <div class="section">
         <div class="section-title">ログ</div>
         <div class="controls" style="margin-bottom: 10px">
           <button class="btn-danger" onclick="clearLog()">ログクリア</button>
@@ -412,6 +434,7 @@
           document.getElementById("disconnectBtn").disabled = true;
           document.getElementById("micBtn").disabled = true;
           document.getElementById("sendTextBtn").disabled = true;
+          document.getElementById("sendContextBtn").disabled = true;
           stopMicrophone();
         };
       }
@@ -435,6 +458,7 @@
             document.getElementById("disconnectBtn").disabled = false;
             document.getElementById("micBtn").disabled = false;
             document.getElementById("sendTextBtn").disabled = false;
+            document.getElementById("sendContextBtn").disabled = false;
             break;
 
           case "text":
@@ -793,6 +817,31 @@
         input.value = "";
       }
 
+      // コンテキスト送信
+      function sendContext() {
+        const input = document.getElementById("contextInput");
+        const text = input.value.trim();
+
+        if (!text) {
+          return;
+        }
+
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+          addLog("先に接続してください", "error");
+          return;
+        }
+
+        addLog(`コンテキスト送信: ${text}`, "info");
+        ws.send(
+          JSON.stringify({
+            type: "context",
+            data: text,
+          }),
+        );
+
+        input.value = "";
+      }
+
       // ステータス更新
       function updateStatus(className, text) {
         const status = document.getElementById("status");
@@ -821,6 +870,15 @@
           sendText();
         }
       });
+
+      // Enterキーでコンテキスト送信
+      document
+        .getElementById("contextInput")
+        .addEventListener("keypress", (e) => {
+          if (e.key === "Enter") {
+            sendContext();
+          }
+        });
     </script>
   </body>
 </html>

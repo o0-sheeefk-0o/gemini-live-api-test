@@ -3,6 +3,7 @@
  * クライアントからの音声を受信し、Gemini Live APIで処理して音声で返却
  */
 
+import http from "http";
 import { WebSocketServer } from "ws";
 import { config, validateConfig } from "./config.js";
 import GeminiLiveClient from "./gemini-live-client.js";
@@ -10,11 +11,11 @@ import GeminiLiveClient from "./gemini-live-client.js";
 // 設定を検証
 validateConfig();
 
-// WebSocketサーバを作成
-const wss = new WebSocketServer({
-  port: config.server.port,
-  host: config.server.host,
-});
+// HTTPサーバを作成
+const server = http.createServer(handleHttpRequest);
+
+// WebSocketサーバを作成（HTTPサーバーにアタッチ）
+const wss = new WebSocketServer({ server });
 
 console.log(`
 ╔══════════════════════════════════════════════════════════╗
@@ -22,16 +23,144 @@ console.log(`
 ╚══════════════════════════════════════════════════════════╝
 `);
 
-console.log(
-  `🚀 WebSocketサーバ起動: ws://${config.server.host}:${config.server.port}`,
-);
 console.log(`📋 モデル: ${config.gemini.model}`);
 console.log(`🎤 入力音声: PCM 16bit ${config.audio.inputSampleRate}Hz mono`);
 console.log(`🔊 出力音声: PCM 16bit ${config.audio.outputSampleRate}Hz mono`);
 console.log("");
 
+// HTTPサーバーを起動
+server.listen(config.server.port, config.server.host, () => {
+  console.log(
+    `🚀 サーバ起動: http://${config.server.host}:${config.server.port}`,
+  );
+  console.log(
+    `   WebSocket: ws://${config.server.host}:${config.server.port}`,
+  );
+  console.log(`   REST API: http://${config.server.host}:${config.server.port}/api`);
+  console.log("");
+});
+
 // クライアント接続管理
 const clients = new Map();
+
+/**
+ * HTTPリクエストを処理
+ */
+function handleHttpRequest(req, res) {
+  // CORS設定
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") {
+    res.writeHead(200);
+    res.end();
+    return;
+  }
+
+  const url = new URL(req.url, `http://${req.headers.host}`);
+
+  // GET /api/clients - 接続中のクライアント一覧
+  if (req.method === "GET" && url.pathname === "/api/clients") {
+    const clientList = Array.from(clients.entries()).map(([id, context]) => ({
+      id,
+      connectedAt: context.connectedAt,
+      isGeminiConnected: context.isGeminiConnected,
+    }));
+
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ clients: clientList }));
+    return;
+  }
+
+  // POST /api/context/:clientId - 特定のクライアントにコンテキスト送信
+  if (req.method === "POST" && url.pathname.startsWith("/api/context/")) {
+    const clientId = url.pathname.split("/api/context/")[1];
+
+    let body = "";
+    req.on("data", (chunk) => {
+      body += chunk.toString();
+    });
+
+    req.on("end", async () => {
+      try {
+        const { context } = JSON.parse(body);
+
+        if (!context) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "context is required" }));
+          return;
+        }
+
+        const clientContext = clients.get(clientId);
+        if (!clientContext) {
+          res.writeHead(404, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Client not found" }));
+          return;
+        }
+
+        await clientContext.geminiClient.sendContext(context);
+
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ success: true, clientId, context }));
+      } catch (error) {
+        console.error("❌ コンテキスト送信エラー:", error);
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: error.message }));
+      }
+    });
+    return;
+  }
+
+  // POST /api/broadcast/context - 全クライアントにコンテキスト送信
+  if (req.method === "POST" && url.pathname === "/api/broadcast/context") {
+    let body = "";
+    req.on("data", (chunk) => {
+      body += chunk.toString();
+    });
+
+    req.on("end", async () => {
+      try {
+        const { context } = JSON.parse(body);
+
+        if (!context) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "context is required" }));
+          return;
+        }
+
+        const results = [];
+        for (const [clientId, clientContext] of clients.entries()) {
+          try {
+            await clientContext.geminiClient.sendContext(context);
+            results.push({ clientId, success: true });
+          } catch (error) {
+            results.push({ clientId, success: false, error: error.message });
+          }
+        }
+
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(
+          JSON.stringify({
+            success: true,
+            context,
+            results,
+            totalClients: clients.size,
+          }),
+        );
+      } catch (error) {
+        console.error("❌ ブロードキャストエラー:", error);
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: error.message }));
+      }
+    });
+    return;
+  }
+
+  // 404 Not Found
+  res.writeHead(404, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({ error: "Not found" }));
+}
 
 wss.on("connection", async (ws, req) => {
   const clientId = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -238,6 +367,12 @@ async function handleJsonMessage(ws, clientContext, message) {
       await clientContext.geminiClient.sendText(message.data);
       break;
 
+    case "context":
+      // コンテキスト情報を処理（応答なし）
+      console.log(`📊 コンテキスト受信: "${message.data}"`);
+      await clientContext.geminiClient.sendContext(message.data);
+      break;
+
     case "get_status":
       // 接続状態を取得
       const status = clientContext.geminiClient.getStatus();
@@ -268,7 +403,10 @@ process.on("SIGINT", async () => {
 
   wss.close(() => {
     console.log("✓ WebSocketサーバを停止しました");
-    process.exit(0);
+    server.close(() => {
+      console.log("✓ HTTPサーバを停止しました");
+      process.exit(0);
+    });
   });
 });
 
