@@ -288,6 +288,20 @@
 
       <div class="section">
         <div class="section-title">音声入力</div>
+        <div class="input-group" style="margin-bottom: 15px">
+          <label style="display: flex; align-items: center; gap: 10px">
+            <input type="checkbox" id="wakeWordEnabled" onchange="toggleWakeWord()" />
+            <span>ウェイクアップワードを使用</span>
+          </label>
+          <input
+            type="text"
+            id="wakeWordInput"
+            placeholder="例: ヘイジェミニ"
+            value="ヘイジェミニ"
+            style="flex: 0.5"
+            disabled
+          />
+        </div>
         <div class="visualizer-container">
           <canvas id="audioVisualizer"></canvas>
         </div>
@@ -304,6 +318,9 @@
             id="micStatus"
             style="line-height: 48px; margin-left: 10px"
           ></span>
+        </div>
+        <div style="margin-top: 10px; font-size: 13px; color: #666;">
+          ℹ️ ウェイクワード有効時: 設定したワードを話すと自動的に録音が開始されます
         </div>
       </div>
 
@@ -384,6 +401,12 @@
       let visualizerCtx = null;
       let animationId = null;
 
+      // ウェイクワード機能
+      let wakeWordRecognition = null;
+      let isWakeWordEnabled = false;
+      let isWaitingForWakeWord = false;
+      let wakeWordTimeout = null;
+
       // 初期化
       window.onload = () => {
         visualizerCanvas = document.getElementById("audioVisualizer");
@@ -442,6 +465,7 @@
       // WebSocket切断
       function disconnect() {
         stopMicrophone();
+        stopWakeWordDetection();
         if (ws) {
           ws.close();
           ws = null;
@@ -559,13 +583,24 @@
         if (isMicrophoneActive) {
           stopMicrophone();
         } else {
-          await startMicrophone();
+          if (isWakeWordEnabled) {
+            // ウェイクワード検出を開始
+            startWakeWordDetection();
+          } else {
+            // 通常のマイク起動
+            await startMicrophone();
+          }
         }
       }
 
       // マイク開始
       async function startMicrophone() {
         try {
+          // ウェイクワード検出を一時停止
+          if (isWakeWordEnabled) {
+            stopWakeWordDetection();
+          }
+
           // AudioContextを作成（16kHzでリサンプリングするため48kHzで取得）
           audioContext = new AudioContext({ sampleRate: 48000 });
 
@@ -659,6 +694,13 @@
 
         drawIdleVisualizer();
         addLog("マイク停止", "info");
+
+        // ウェイクワード機能が有効な場合は、ウェイクワード検出を再開
+        if (isWakeWordEnabled) {
+          setTimeout(() => {
+            startWakeWordDetection();
+          }, 1000);
+        }
       }
 
       // AudioWorkletProcessorをBlobとして作成
@@ -840,6 +882,125 @@
         );
 
         input.value = "";
+      }
+
+      // ウェイクワード機能のトグル
+      function toggleWakeWord() {
+        const checkbox = document.getElementById("wakeWordEnabled");
+        const input = document.getElementById("wakeWordInput");
+
+        isWakeWordEnabled = checkbox.checked;
+        input.disabled = !checkbox.checked;
+
+        if (isWakeWordEnabled) {
+          addLog("ウェイクワード機能を有効化しました", "success");
+        } else {
+          addLog("ウェイクワード機能を無効化しました", "info");
+          stopWakeWordDetection();
+        }
+      }
+
+      // ウェイクワード検出を開始
+      function startWakeWordDetection() {
+        if (!isWakeWordEnabled) return;
+
+        // Web Speech API がサポートされているか確認
+        if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+          addLog("このブラウザは音声認識をサポートしていません", "error");
+          return;
+        }
+
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        wakeWordRecognition = new SpeechRecognition();
+        wakeWordRecognition.lang = 'ja-JP';
+        wakeWordRecognition.continuous = true;
+        wakeWordRecognition.interimResults = false;
+
+        const wakeWord = document.getElementById("wakeWordInput").value.trim().toLowerCase();
+
+        wakeWordRecognition.onresult = (event) => {
+          const last = event.results.length - 1;
+          const transcript = event.results[last][0].transcript.toLowerCase().trim();
+
+          addLog(`音声検出: "${transcript}"`, "transcript");
+
+          // ウェイクワードを含むかチェック
+          if (transcript.includes(wakeWord) ||
+              transcript.replace(/\s/g, '').includes(wakeWord.replace(/\s/g, ''))) {
+            addLog(`✨ ウェイクワード検出: "${wakeWord}"`, "success");
+
+            // マイクを開始
+            if (!isMicrophoneActive) {
+              startMicrophone();
+
+              // 10秒後に自動停止
+              if (wakeWordTimeout) clearTimeout(wakeWordTimeout);
+              wakeWordTimeout = setTimeout(() => {
+                if (isMicrophoneActive) {
+                  addLog("自動停止: 10秒経過しました", "info");
+                  stopMicrophone();
+
+                  // ウェイクワード検出を再開
+                  setTimeout(() => {
+                    if (isWakeWordEnabled) {
+                      startWakeWordDetection();
+                    }
+                  }, 1000);
+                }
+              }, 10000);
+            }
+          }
+        };
+
+        wakeWordRecognition.onerror = (event) => {
+          console.error("Wake word recognition error:", event.error);
+          if (event.error !== 'no-speech') {
+            addLog(`ウェイクワード検出エラー: ${event.error}`, "error");
+          }
+        };
+
+        wakeWordRecognition.onend = () => {
+          // 自動的に再起動
+          if (isWakeWordEnabled && !isMicrophoneActive) {
+            setTimeout(() => {
+              if (isWakeWordEnabled) {
+                wakeWordRecognition.start();
+              }
+            }, 100);
+          }
+        };
+
+        try {
+          wakeWordRecognition.start();
+          isWaitingForWakeWord = true;
+          addLog(`🎧 ウェイクワード待機中: "${wakeWord}"`, "info");
+          document.getElementById("micStatus").textContent = `ウェイクワード待機中: "${wakeWord}"`;
+        } catch (error) {
+          console.error("Wake word detection start error:", error);
+          addLog("ウェイクワード検出の開始に失敗しました", "error");
+        }
+      }
+
+      // ウェイクワード検出を停止
+      function stopWakeWordDetection() {
+        if (wakeWordRecognition) {
+          try {
+            wakeWordRecognition.stop();
+          } catch (error) {
+            // 既に停止している場合のエラーを無視
+          }
+          wakeWordRecognition = null;
+        }
+        isWaitingForWakeWord = false;
+
+        if (wakeWordTimeout) {
+          clearTimeout(wakeWordTimeout);
+          wakeWordTimeout = null;
+        }
+
+        if (!isMicrophoneActive) {
+          document.getElementById("micStatus").textContent = "";
+        }
       }
 
       // ステータス更新
