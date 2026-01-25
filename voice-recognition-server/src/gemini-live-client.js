@@ -142,12 +142,10 @@ export class GeminiLiveClient {
     console.log(`📝 テキスト送信: "${text}"`);
 
     try {
-      await this.session.send(
-        {
-          text: text,
-        },
-        { endOfTurn: true },
-      );
+      await this.session.sendClientContent({
+        turns: text,
+        turnComplete: true,
+      });
     } catch (error) {
       console.error("❌ テキスト送信エラー:", error);
       if (this.onError) {
