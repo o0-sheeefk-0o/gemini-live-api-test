@@ -92,7 +92,6 @@ wss.on("connection", async (ws, req) => {
 
   // メッセージ受信
   ws.on("message", async (data, isBinary) => {
-    console.log(`!!!!${data}`);
     try {
       if (isBinary) {
         // バイナリデータ = 音声データ

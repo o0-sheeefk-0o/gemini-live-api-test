@@ -44,12 +44,12 @@ export class GeminiLiveClient {
       this.session = await this.ai.live.connect({
         model: config.gemini.model,
         config: {
-          responseModalities: [Modality.AUDIO, Modality.TEXT],
-          systemInstruction: config.systemInstruction,
-          speechConfig: {
-            voiceConfig: {
-              prebuiltVoiceConfig: {
-                voiceName: config.gemini.voiceName || "Aoede",
+          response_modalities: [Modality.AUDIO, Modality.TEXT],
+          system_instruction: config.systemInstruction,
+          speech_config: {
+            voice_config: {
+              prebuilt_voice_config: {
+                voice_name: config.gemini.voiceName || "Aoede",
               },
             },
           },
