@@ -13,6 +13,7 @@ export class GeminiLiveClient {
     this.session = null;
     this.isConnected = false;
     this.isProcessing = false;
+    this.isGenerating = false; // Geminiが応答中かどうか
 
     // コールバック
     this.onAudioChunk = null;
@@ -110,6 +111,14 @@ export class GeminiLiveClient {
     }
 
     try {
+      // Geminiが応答中の場合、割り込みを発生させる
+      if (this.isGenerating) {
+        console.log("⚡ 割り込み発生: Geminiの応答を中断します");
+        // 割り込みフラグをリセット
+        this.isGenerating = false;
+        this.pendingFunctionCalls = [];
+      }
+
       // Buffer を base64 に変換
       const base64Audio = Buffer.isBuffer(audioData)
         ? audioData.toString("base64")
@@ -197,6 +206,9 @@ export class GeminiLiveClient {
 
       // モデルのターン（応答）
       if (serverContent.modelTurn) {
+        // Geminiが応答を開始
+        this.isGenerating = true;
+
         const parts = serverContent.modelTurn.parts || [];
 
         for (const part of parts) {
@@ -253,6 +265,7 @@ export class GeminiLiveClient {
       // ターン完了
       if (serverContent.turnComplete) {
         console.log("✓ ターン完了");
+        this.isGenerating = false; // 応答終了
         this._processPendingToolCalls();
         if (this.onTurnComplete) {
           this.onTurnComplete();
@@ -262,6 +275,7 @@ export class GeminiLiveClient {
       // 割り込み検知
       if (serverContent.interrupted) {
         console.log("⚠️ 割り込み検知");
+        this.isGenerating = false; // 応答中断
         this.pendingFunctionCalls = [];
       }
     }
@@ -314,6 +328,7 @@ export class GeminiLiveClient {
     return {
       isConnected: this.isConnected,
       isProcessing: this.isProcessing,
+      isGenerating: this.isGenerating,
       hasPendingToolCalls: this.pendingFunctionCalls.length > 0,
     };
   }
