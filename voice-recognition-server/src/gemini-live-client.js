@@ -68,8 +68,8 @@ export class GeminiLiveClient {
             console.log("✓ Gemini Live API 接続完了");
             this.isConnected = true;
           },
-          onmessage: (message) => {
-            this._handleMessage(message);
+          onmessage: async (message) => {
+            await this._handleMessage(message);
           },
           onerror: (error) => {
             console.error("❌ Gemini Live API エラー:", error);
@@ -120,7 +120,7 @@ export class GeminiLiveClient {
     try {
       // Geminiが応答中の場合、割り込みを発生させる
       if (this.isGenerating) {
-        console.log("⚡ 音声送信スタート");
+        console.log("⚡ 音声送信中");
         // 割り込みフラグをリセット
         this.isGenerating = false;
         // ツール実行中でなければpendingFunctionCallsをクリア
@@ -238,7 +238,7 @@ export class GeminiLiveClient {
    * メッセージを処理
    * @private
    */
-  _handleMessage(message) {
+  async _handleMessage(message) {
     // サーバーコンテンツを処理
     if (message.serverContent) {
       const serverContent = message.serverContent;
@@ -305,7 +305,7 @@ export class GeminiLiveClient {
       if (serverContent.turnComplete) {
         console.log("✓ ターン完了");
         this.isGenerating = false; // 応答終了
-        this._processPendingToolCalls();
+        await this._processPendingToolCalls();
         if (this.onTurnComplete) {
           this.onTurnComplete();
         }
@@ -348,10 +348,11 @@ export class GeminiLiveClient {
     this.isExecutingTools = true;
 
     console.log(
-      `\n🔧 ${this.pendingFunctionCalls.length}個のツールを実行中...`,
+      `\n🔧 ${this.pendingFunctionCalls.length}個のツールを非同期実行中...`,
     );
 
-    for (const functionCall of this.pendingFunctionCalls) {
+    // 各ツールを独立した非同期タスクとして実行
+    const promises = this.pendingFunctionCalls.map(async (functionCall) => {
       try {
         const results = await executeTools([functionCall]);
         if (results.length > 0) {
@@ -362,9 +363,12 @@ export class GeminiLiveClient {
         console.error(`❌ ツール実行エラー (${functionCall.name}):`, error);
         await this.sendToolResponse(functionCall, { error: error.message });
       }
-    }
+    });
 
     this.pendingFunctionCalls = [];
+
+    // すべてのツール実行完了を待つ
+    await Promise.all(promises);
 
     // ツール実行完了
     this.isExecutingTools = false;

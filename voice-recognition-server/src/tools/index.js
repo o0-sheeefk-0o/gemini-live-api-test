@@ -6,6 +6,36 @@ import { getWeather, getForecast, getWeatherAlerts } from "./weather.js";
 import { GoogleGenAI, Modality, Behavior } from "@google/genai";
 
 /**
+ * データベース検索をシミュレート（非同期処理の例）
+ * @param {string} query - 検索クエリ
+ * @param {string} location - 検索対象の場所
+ * @returns {Promise<Object>} - 検索結果
+ */
+async function searchDatabase(query, location) {
+  // 非同期処理をシミュレート（2-4秒のランダムな遅延）
+  const delay = Math.floor(Math.random() * 2000) + 2000;
+  console.log(`   データベース検索中... (約${delay}ms)`);
+
+  await new Promise((resolve) => setTimeout(resolve, delay));
+
+  // ダミーデータを返す
+  const results = [
+    { name: `${query}スポット1`, rating: 4.5, address: `${location}○○区` },
+    { name: `${query}スポット2`, rating: 4.2, address: `${location}△△区` },
+    { name: `${query}スポット3`, rating: 4.8, address: `${location}××区` },
+  ];
+
+  return {
+    success: true,
+    query: query,
+    location: location || "指定なし",
+    count: results.length,
+    results: results,
+    message: `${location || ""}で${query}を${results.length}件見つけました`,
+  };
+}
+
+/**
  * Gemini Live APIに渡すツール定義
  * @returns {Array} - ツール定義配列
  */
@@ -62,6 +92,26 @@ export function getToolDefinitions() {
             required: ["location"],
           },
         },
+        {
+          name: "search_database",
+          behavior: Behavior.NON_BLOCKING,
+          description:
+            "データベースから情報を検索します（処理に数秒かかる場合があります）",
+          parameters: {
+            type: "object",
+            properties: {
+              query: {
+                type: "string",
+                description: "検索クエリ（例: レストラン、ホテル、観光地）",
+              },
+              location: {
+                type: "string",
+                description: "検索対象の場所（例: 東京、大阪）",
+              },
+            },
+            required: ["query"],
+          },
+        },
       ],
     },
   ];
@@ -72,7 +122,7 @@ export function getToolDefinitions() {
  * @param {Object} functionCall - Geminiから受け取ったfunction call
  * @returns {Object} - ツール実行結果
  */
-export function executeTool(functionCall) {
+export async function executeTool(functionCall) {
   const toolName = functionCall.name;
   const args = functionCall.args || {};
 
@@ -93,6 +143,10 @@ export function executeTool(functionCall) {
 
       case "get_weather_alerts":
         result = getWeatherAlerts(args.location);
+        break;
+
+      case "search_database":
+        result = await searchDatabase(args.query, args.location);
         break;
 
       default:
@@ -140,7 +194,7 @@ export async function executeTools(functionCalls) {
   const results = [];
 
   for (const functionCall of functionCalls) {
-    const result = executeTool(functionCall);
+    const result = await executeTool(functionCall);
     const formatted = formatToolResponse(functionCall, result);
     results.push(formatted);
   }
