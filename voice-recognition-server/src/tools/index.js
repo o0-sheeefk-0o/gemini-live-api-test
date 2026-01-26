@@ -66,9 +66,9 @@ export function getToolDefinitions() {
 /**
  * ツールを実行
  * @param {Object} functionCall - Geminiから受け取ったfunction call
- * @returns {Object} - ツール実行結果
+ * @returns {Promise<Object>} - ツール実行結果
  */
-export function executeTool(functionCall) {
+export async function executeTool(functionCall) {
   const toolName = functionCall.name;
   const args = functionCall.args || {};
 
@@ -80,15 +80,15 @@ export function executeTool(functionCall) {
 
     switch (toolName) {
       case 'get_weather':
-        result = getWeather(args.location);
+        result = await getWeather(args.location);
         break;
 
       case 'get_forecast':
-        result = getForecast(args.location, args.days || 3);
+        result = await getForecast(args.location, args.days || 3);
         break;
 
       case 'get_weather_alerts':
-        result = getWeatherAlerts(args.location);
+        result = await getWeatherAlerts(args.location);
         break;
 
       default:
@@ -136,7 +136,7 @@ export async function executeTools(functionCalls) {
   const results = [];
 
   for (const functionCall of functionCalls) {
-    const result = executeTool(functionCall);
+    const result = await executeTool(functionCall);
     const formatted = formatToolResponse(functionCall, result);
     results.push(formatted);
   }

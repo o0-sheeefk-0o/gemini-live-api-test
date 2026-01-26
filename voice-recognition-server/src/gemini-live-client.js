@@ -295,7 +295,13 @@ export class GeminiLiveClient {
       if (serverContent.turnComplete) {
         console.log("✓ ターン完了");
         this.isGenerating = false; // 応答終了
-        this._processPendingToolCalls();
+        // コールバック内なので await できないため、Promise チェーンで処理
+        this._processPendingToolCalls().catch((error) => {
+          console.error("❌ ツール処理エラー:", error);
+          if (this.onError) {
+            this.onError(error);
+          }
+        });
         if (this.onTurnComplete) {
           this.onTurnComplete();
         }
