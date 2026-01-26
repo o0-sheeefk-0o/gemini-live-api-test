@@ -45,17 +45,22 @@ export class GeminiLiveClient {
       this.session = await this.ai.live.connect({
         model: config.gemini.model,
         config: {
-          response_modalities: [Modality.AUDIO, Modality.TEXT],
-          system_instruction: config.systemInstruction,
-          speech_config: {
-            voice_config: {
-              prebuilt_voice_config: {
-                voice_name: config.gemini.voiceName || "Aoede",
+          responseModalities: [Modality.AUDIO],
+          // response_modalities: [Modality.AUDIO, Modality.TEXT], // Modality.TEXT を含むと「Cannot extract voices from a non-audio request」で失敗する(google の修正待ち)
+          systemInstruction: config.systemInstruction,
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: {
+                voiceName: config.gemini.voiceName || "Zephyr",
               },
             },
           },
+          tools: tools,
+          contextWindowCompression: {
+            triggerTokens: "25600",
+            slidingWindow: { targetTokens: "12800" },
+          },
         },
-        tools: tools,
         callbacks: {
           onopen: () => {
             console.log("✓ Gemini Live API 接続完了");
@@ -206,9 +211,9 @@ export class GeminiLiveClient {
     console.log(`📤 ツール結果送信: ${functionCall.name}`);
 
     try {
-      await this.session.send(
+      await this.session.sendToolResponse(
         {
-          functionResponse: {
+          functionResponses: {
             id: functionCall.id,
             name: functionCall.name,
             response: { result: result },
@@ -305,7 +310,7 @@ export class GeminiLiveClient {
       if (serverContent.interrupted) {
         console.log("⚠️ 割り込み検知");
         this.isGenerating = false; // 応答中断
-        this.pendingFunctionCalls = [];
+        // this.pendingFunctionCalls = [];
       }
     }
 
@@ -314,7 +319,12 @@ export class GeminiLiveClient {
       console.log(
         `🔧 ツール呼び出し（toolCall形式）: ${message.toolCall.name}`,
       );
-      this.pendingFunctionCalls.push(message.toolCall);
+      console.log(
+        `🔧 ツール呼び出し（toolCall形式）: ${JSON.stringify(message)}`,
+      );
+      for (const functionCall of message.toolCall.functionCalls) {
+        this.pendingFunctionCalls.push(functionCall);
+      }
       if (this.onToolCall) {
         this.onToolCall(message.toolCall);
       }

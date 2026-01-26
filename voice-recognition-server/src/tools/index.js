@@ -2,7 +2,8 @@
  * ツール定義・実行マネージャー
  */
 
-import { getWeather, getForecast, getWeatherAlerts } from './weather.js';
+import { getWeather, getForecast, getWeatherAlerts } from "./weather.js";
+import { GoogleGenAI, Modality, Behavior } from "@google/genai";
 
 /**
  * Gemini Live APIに渡すツール定義
@@ -13,49 +14,52 @@ export function getToolDefinitions() {
     {
       functionDeclarations: [
         {
-          name: 'get_weather',
-          description: '指定された場所の現在の天気情報を取得します',
+          name: "get_weather",
+          behavior: Behavior.NON_BLOCKING,
+          description: "指定された場所の現在の天気情報を取得します",
           parameters: {
-            type: 'object',
+            type: "object",
             properties: {
               location: {
-                type: 'string',
-                description: '天気を知りたい場所（例: 東京、大阪、New York）',
+                type: "string",
+                description: "天気を知りたい場所（例: 東京、大阪、New York）",
               },
             },
-            required: ['location'],
+            required: ["location"],
           },
         },
         {
-          name: 'get_forecast',
-          description: '指定された場所の天気予報を取得します',
+          name: "get_forecast",
+          behavior: Behavior.NON_BLOCKING,
+          description: "指定された場所の天気予報を取得します",
           parameters: {
-            type: 'object',
+            type: "object",
             properties: {
               location: {
-                type: 'string',
-                description: '天気予報を知りたい場所',
+                type: "string",
+                description: "天気予報を知りたい場所",
               },
               days: {
-                type: 'number',
-                description: '予報日数（1-7日、デフォルト: 3）',
+                type: "number",
+                description: "予報日数（1-7日、デフォルト: 3）",
               },
             },
-            required: ['location'],
+            required: ["location"],
           },
         },
         {
-          name: 'get_weather_alerts',
-          description: '指定された場所の天気アラート・警報情報を取得します',
+          name: "get_weather_alerts",
+          behavior: Behavior.NON_BLOCKING,
+          description: "指定された場所の天気アラート・警報情報を取得します",
           parameters: {
-            type: 'object',
+            type: "object",
             properties: {
               location: {
-                type: 'string',
-                description: '天気アラートを確認したい場所',
+                type: "string",
+                description: "天気アラートを確認したい場所",
               },
             },
-            required: ['location'],
+            required: ["location"],
           },
         },
       ],
@@ -79,15 +83,15 @@ export function executeTool(functionCall) {
     let result;
 
     switch (toolName) {
-      case 'get_weather':
+      case "get_weather":
         result = getWeather(args.location);
         break;
 
-      case 'get_forecast':
+      case "get_forecast":
         result = getForecast(args.location, args.days || 3);
         break;
 
-      case 'get_weather_alerts':
+      case "get_weather_alerts":
         result = getWeatherAlerts(args.location);
         break;
 
