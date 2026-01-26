@@ -14,6 +14,7 @@ export class GeminiLiveClient {
     this.isConnected = false;
     this.isProcessing = false;
     this.isGenerating = false; // Geminiが応答中かどうか
+    this.isExecutingTools = false; // ツール実行中かどうか
 
     // コールバック
     this.onAudioChunk = null;
@@ -119,10 +120,13 @@ export class GeminiLiveClient {
     try {
       // Geminiが応答中の場合、割り込みを発生させる
       if (this.isGenerating) {
-        console.log("⚡ 割り込み発生: Geminiの応答を中断します");
+        console.log("⚡ 音声送信スタート");
         // 割り込みフラグをリセット
         this.isGenerating = false;
-        this.pendingFunctionCalls = [];
+        // ツール実行中でなければpendingFunctionCallsをクリア
+        if (!this.isExecutingTools) {
+          this.pendingFunctionCalls = [];
+        }
       }
 
       // Buffer を base64 に変換
@@ -318,13 +322,12 @@ export class GeminiLiveClient {
     // ツール呼び出し（別形式）
     if (message.toolCall) {
       console.log(
-        `🔧 ツール呼び出し（toolCall形式）: ${message.toolCall.name}`,
-      );
-      console.log(
         `🔧 ツール呼び出し（toolCall形式）: ${JSON.stringify(message)}`,
       );
       for (const functionCall of message.toolCall.functionCalls) {
         this.pendingFunctionCalls.push(functionCall);
+        // ツール実行開始
+        this.isExecutingTools = true;
       }
       if (this.onToolCall) {
         this.onToolCall(message.toolCall);
@@ -340,6 +343,9 @@ export class GeminiLiveClient {
     if (this.pendingFunctionCalls.length === 0) {
       return;
     }
+
+    // ツール実行開始
+    this.isExecutingTools = true;
 
     console.log(
       `\n🔧 ${this.pendingFunctionCalls.length}個のツールを実行中...`,
@@ -359,6 +365,9 @@ export class GeminiLiveClient {
     }
 
     this.pendingFunctionCalls = [];
+
+    // ツール実行完了
+    this.isExecutingTools = false;
   }
 
   /**
@@ -369,6 +378,7 @@ export class GeminiLiveClient {
       isConnected: this.isConnected,
       isProcessing: this.isProcessing,
       isGenerating: this.isGenerating,
+      isExecutingTools: this.isExecutingTools,
       hasPendingToolCalls: this.pendingFunctionCalls.length > 0,
     };
   }
