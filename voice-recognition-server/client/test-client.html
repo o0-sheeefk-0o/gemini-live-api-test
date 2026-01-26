@@ -394,6 +394,7 @@
       let playbackContext = null;
       let audioQueue = [];
       let isPlaying = false;
+      let nextPlayTime = 0;
 
       // ビジュアライザー
       let analyser = null;
@@ -459,6 +460,11 @@
           document.getElementById("sendTextBtn").disabled = true;
           document.getElementById("sendContextBtn").disabled = true;
           stopMicrophone();
+
+          // 音声再生状態をリセット
+          audioQueue = [];
+          isPlaying = false;
+          nextPlayTime = 0;
         };
       }
 
@@ -483,6 +489,14 @@
             document.getElementById("micBtn").disabled = false;
             document.getElementById("sendTextBtn").disabled = false;
             document.getElementById("sendContextBtn").disabled = false;
+
+            // 音声再生状態をリセット
+            audioQueue = [];
+            isPlaying = false;
+            nextPlayTime = 0;
+            if (playbackContext) {
+              nextPlayTime = playbackContext.currentTime;
+            }
             break;
 
           case "text":
@@ -524,8 +538,18 @@
         audioQueue.push(arrayBuffer);
         addLog(`音声チャンク受信: ${arrayBuffer.byteLength} bytes`, "audio");
 
+        // 再生コンテキストを作成
+        if (!playbackContext) {
+          playbackContext = new AudioContext({ sampleRate: 24000 });
+          nextPlayTime = playbackContext.currentTime;
+        }
+
         // 再生開始
         if (!isPlaying) {
+          isPlaying = true;
+          playNextAudio();
+        } else {
+          // 既に再生中の場合もキューに追加されたのでスケジュール
           playNextAudio();
         }
       }
@@ -535,13 +559,6 @@
         if (audioQueue.length === 0) {
           isPlaying = false;
           return;
-        }
-
-        isPlaying = true;
-
-        // 再生コンテキストを作成
-        if (!playbackContext) {
-          playbackContext = new AudioContext({ sampleRate: 24000 });
         }
 
         const arrayBuffer = audioQueue.shift();
@@ -563,18 +580,37 @@
           );
           audioBuffer.getChannelData(0).set(float32Array);
 
+          // 再生時刻を計算
+          const currentTime = playbackContext.currentTime;
+          const scheduledTime = Math.max(currentTime, nextPlayTime);
+
+          // 次の再生開始時刻を更新（このバッファの長さ分後）
+          nextPlayTime = scheduledTime + audioBuffer.duration;
+
           // 再生
           const source = playbackContext.createBufferSource();
           source.buffer = audioBuffer;
           source.connect(playbackContext.destination);
           source.onended = () => {
-            playNextAudio();
+            // キューに残りがあれば再生継続
+            if (audioQueue.length > 0) {
+              playNextAudio();
+            } else {
+              isPlaying = false;
+            }
           };
-          source.start();
+          source.start(scheduledTime);
+
+          // キューに残りがあれば即座に次をスケジュール
+          if (audioQueue.length > 0) {
+            playNextAudio();
+          }
         } catch (error) {
           console.error("Audio playback error:", error);
           isPlaying = false;
-          playNextAudio();
+          if (audioQueue.length > 0) {
+            playNextAudio();
+          }
         }
       }
 
@@ -599,6 +635,13 @@
           // ウェイクワード検出を一時停止
           if (isWakeWordEnabled) {
             stopWakeWordDetection();
+          }
+
+          // 音声再生を停止（ユーザーの発話で割り込み）
+          audioQueue = [];
+          isPlaying = false;
+          if (playbackContext) {
+            nextPlayTime = playbackContext.currentTime;
           }
 
           // AudioContextを作成（16kHzでリサンプリングするため48kHzで取得）
