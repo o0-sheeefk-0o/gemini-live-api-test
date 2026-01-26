@@ -56,6 +56,7 @@ export class GeminiLiveClient {
             },
           },
           tools: tools,
+          //セッションを長くして、接続が突然終了しないようにする
           contextWindowCompression: {
             triggerTokens: "25600",
             slidingWindow: { targetTokens: "12800" },
