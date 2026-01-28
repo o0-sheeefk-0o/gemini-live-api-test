@@ -333,6 +333,18 @@ function setupGeminiCallbacks(ws, clientContext) {
       );
     }
   };
+
+  // 会話履歴更新
+  gemini.onConversationUpdate = (conversationHistory) => {
+    if (ws.readyState === ws.OPEN) {
+      ws.send(
+        JSON.stringify({
+          type: "conversation_update",
+          data: conversationHistory,
+        }),
+      );
+    }
+  };
 }
 
 /**
@@ -380,6 +392,28 @@ async function handleJsonMessage(ws, clientContext, message) {
         JSON.stringify({
           type: "status",
           data: status,
+        }),
+      );
+      break;
+
+    case "get_conversation":
+      // 会話履歴を取得
+      const conversationHistory =
+        clientContext.geminiClient.getConversationHistory();
+      ws.send(
+        JSON.stringify({
+          type: "conversation_history",
+          data: conversationHistory,
+        }),
+      );
+      break;
+
+    case "clear_conversation":
+      // 会話履歴をクリア
+      clientContext.geminiClient.clearConversationHistory();
+      ws.send(
+        JSON.stringify({
+          type: "conversation_cleared",
         }),
       );
       break;

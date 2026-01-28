@@ -23,10 +23,18 @@ export class GeminiLiveClient {
     this.onToolCall = null;
     this.onError = null;
     this.onTurnComplete = null;
+    this.onConversationUpdate = null; // 会話履歴が更新されたときのコールバック
 
     // 音声バッファ
     this.audioBuffer = [];
     this.pendingFunctionCalls = [];
+
+    // トランスクリプトバッファ（チャンクを蓄積）
+    this.currentInputTranscript = "";
+    this.currentOutputTranscript = "";
+
+    // 会話履歴
+    this.conversationHistory = [];
   }
 
   /**
@@ -283,30 +291,30 @@ export class GeminiLiveClient {
         }
       }
 
-      // 入力音声のトランスクリプト
+      // 入力音声のトランスクリプト（チャンクを蓄積）
       if (serverContent.inputTranscription) {
-        console.log(
-          `🎤 入力トランスクリプト: ${serverContent.inputTranscription.text}`,
-        );
-        if (this.onTranscript) {
-          this.onTranscript(serverContent.inputTranscription.text, "input");
-        }
+        const chunk = serverContent.inputTranscription.text;
+        console.log(`🎤 入力トランスクリプト(chunk): ${chunk}`);
+        this.currentInputTranscript += chunk;
+        // チャンクは蓄積するだけで、フロントには送らない
       }
 
-      // 出力音声のトランスクリプト
+      // 出力音声のトランスクリプト（チャンクを蓄積）
       if (serverContent.outputTranscription) {
-        console.log(
-          `🔊 出力トランスクリプト: ${serverContent.outputTranscription.text}`,
-        );
-        if (this.onTranscript) {
-          this.onTranscript(serverContent.outputTranscription.text, "output");
-        }
+        const chunk = serverContent.outputTranscription.text;
+        console.log(`🔊 出力トランスクリプト(chunk): ${chunk}`);
+        this.currentOutputTranscript += chunk;
+        // チャンクは蓄積するだけで、フロントには送らない
       }
 
       // ターン完了
       if (serverContent.turnComplete) {
         console.log("✓ ターン完了");
         this.isGenerating = false; // 応答終了
+
+        // 蓄積したトランスクリプトを会話履歴に追加
+        this._finalizeTranscripts();
+
         await this._processPendingToolCalls();
         if (this.onTurnComplete) {
           this.onTurnComplete();
@@ -334,6 +342,67 @@ export class GeminiLiveClient {
       if (this.onToolCall) {
         this.onToolCall(message.toolCall);
       }
+    }
+  }
+
+  /**
+   * トランスクリプトを確定して会話履歴に追加
+   * @private
+   */
+  _finalizeTranscripts() {
+    let updated = false;
+
+    // 入力トランスクリプトを会話履歴に追加
+    if (this.currentInputTranscript.trim()) {
+      // 全てのスペース・改行を削除
+      const cleanedContent = this.currentInputTranscript
+        .trim()
+        .replaceAll(/\s+/g, "");
+
+      const userMessage = {
+        role: "user",
+        content: cleanedContent,
+        timestamp: new Date().toISOString(),
+      };
+      this.conversationHistory.push(userMessage);
+      console.log(`📝 会話履歴追加(user): "${userMessage.content}"`);
+
+      // ターン完了時にトランスクリプト全体を送信
+      if (this.onTranscript) {
+        this.onTranscript(userMessage.content, "input");
+      }
+
+      this.currentInputTranscript = "";
+      updated = true;
+    }
+
+    // 出力トランスクリプトを会話履歴に追加
+    if (this.currentOutputTranscript.trim()) {
+      // 前後のスペースを削除し、連続するスペースを1つにまとめる
+      const cleanedContent = this.currentOutputTranscript
+        .trim()
+        .replaceAll(/\s+/g, "");
+
+      const assistantMessage = {
+        role: "assistant",
+        content: cleanedContent,
+        timestamp: new Date().toISOString(),
+      };
+      this.conversationHistory.push(assistantMessage);
+      console.log(`📝 会話履歴追加(assistant): "${assistantMessage.content}"`);
+
+      // ターン完了時にトランスクリプト全体を送信
+      if (this.onTranscript) {
+        this.onTranscript(assistantMessage.content, "output");
+      }
+
+      this.currentOutputTranscript = "";
+      updated = true;
+    }
+
+    // 会話履歴が更新された場合、コールバックを呼び出す
+    if (updated && this.onConversationUpdate) {
+      this.onConversationUpdate(this.conversationHistory);
     }
   }
 
@@ -387,6 +456,24 @@ export class GeminiLiveClient {
       isExecutingTools: this.isExecutingTools,
       hasPendingToolCalls: this.pendingFunctionCalls.length > 0,
     };
+  }
+
+  /**
+   * 会話履歴を取得
+   * @returns {Array} 会話履歴の配列
+   */
+  getConversationHistory() {
+    return this.conversationHistory;
+  }
+
+  /**
+   * 会話履歴をクリア
+   */
+  clearConversationHistory() {
+    this.conversationHistory = [];
+    this.currentInputTranscript = "";
+    this.currentOutputTranscript = "";
+    console.log("🗑️ 会話履歴をクリアしました");
   }
 }
 
