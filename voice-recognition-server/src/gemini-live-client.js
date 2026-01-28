@@ -47,8 +47,10 @@ export class GeminiLiveClient {
         model: config.gemini.model,
         config: {
           responseModalities: [Modality.AUDIO],
-          // response_modalities: [Modality.AUDIO, Modality.TEXT], // Modality.TEXT を含むと「Cannot extract voices from a non-audio request」で失敗する(google の修正待ち)
+          // response_modalities: [Modality.AUDIO, Modality.TEXT], // Modality.TEXT を含むと「Request contains an invalid argument」で失敗する(google の修正待ち)
           systemInstruction: config.systemInstruction,
+          inputAudioTranscription: {},
+          outputAudioTranscription: {},
           speechConfig: {
             voiceConfig: {
               prebuiltVoiceConfig: {
@@ -282,22 +284,22 @@ export class GeminiLiveClient {
       }
 
       // 入力音声のトランスクリプト
-      if (serverContent.inputTranscript) {
+      if (serverContent.inputTranscription) {
         console.log(
-          `🎤 入力トランスクリプト: ${serverContent.inputTranscript}`,
+          `🎤 入力トランスクリプト: ${serverContent.inputTranscription.text}`,
         );
         if (this.onTranscript) {
-          this.onTranscript(serverContent.inputTranscript, "input");
+          this.onTranscript(serverContent.inputTranscription.text, "input");
         }
       }
 
       // 出力音声のトランスクリプト
-      if (serverContent.outputTranscript) {
+      if (serverContent.outputTranscription) {
         console.log(
-          `🔊 出力トランスクリプト: ${serverContent.outputTranscript}`,
+          `🔊 出力トランスクリプト: ${serverContent.outputTranscription.text}`,
         );
         if (this.onTranscript) {
-          this.onTranscript(serverContent.outputTranscript, "output");
+          this.onTranscript(serverContent.outputTranscription.text, "output");
         }
       }
 
